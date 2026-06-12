@@ -34,28 +34,33 @@ def get_stock_data(ticker, strategy):
         hist = s.history(period="1y")
         if hist.empty: return None
         
-        rsi = 50 
         pe = info.get('trailingPE', 0) or 0
         fpe = info.get('forwardPE', 0) or 0
         growth = info.get('revenueGrowth', 0) or 0
         
-        # Стратегийн логик
+        # Шинжээчдийн таамаг тооцоолох
+        target = info.get('targetMeanPrice', 0)
+        current = info.get('currentPrice', 1)
+        growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
+        
+        # Стратегиуд
         if strategy == "1. Төгс боломж" and not (0 < pe < 30): return None
-        if strategy == "2. Тренд дагах (Уян хатан)" and rsi > 75: return None
+        if strategy == "2. Тренд дагах (Уян хатан)" and 50 > 75: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 40 and growth > 0.1): return None
         
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         
         return {
             "Тикер": ticker, "Компани": info.get('longName', ticker),
-            "info": info, "hist": hist, "radar": radar_df, "signal_color": "green"
+            "info": info, "hist": hist, "radar": radar_df, 
+            "growth_pot": growth_pot, "signal_color": "green"
         }
     except: return None
 
 st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 
-if st.sidebar.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
+if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     all_tickers = get_all_us_tickers()
     data = []
     progress_bar = st.progress(0)
@@ -81,8 +86,10 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЗАЙГҮЙ БИЧСЭН (Энэ нь радар болон бусад таб-ыг гацаахгүй)
+            # ЗАЙГҮЙ БИЧИХ ДҮРЭМ (Өнгө заавал гарна)
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
+            # ШИНЖЭЭЧДИЙН ДҮГНЭЛТ
+            st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
             fig = px.line_polar(stock['radar'], r='Оноо', theta='Үзүүлэлт', line_close=True)
             st.plotly_chart(fig, use_container_width=True)
