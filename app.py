@@ -8,15 +8,25 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max"
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    tickers = []
+    tickers = set()
     try:
-        url_500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        tickers.extend(pd.read_html(url_500)[0]['Symbol'].str.replace('.', '-', regex=False).tolist())
-        url_600 = 'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies'
-        tickers.extend(pd.read_html(url_600)[0]['Ticker symbol'].str.replace('.', '-', regex=False).tolist())
+        # S&P 500 & 600
+        for url in ['https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 
+                    'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies']:
+            df = pd.read_html(url)[0]
+            col = 'Symbol' if 'Symbol' in df.columns else 'Ticker symbol'
+            tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
+        
+        # Nasdaq-100
+        url_nasdaq = 'https://en.wikipedia.org/wiki/Nasdaq-100'
+        tickers.update(pd.read_html(url_nasdaq)[4]['Ticker'].tolist())
+        
+        # Russell 2000 (Эхний 200)
+        url_russell = 'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
+        tickers.update(pd.read_html(url_russell)[0]['Ticker'].tolist()[:200])
     except:
-        tickers = ['AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'GOOGL', 'AMZN']
-    return list(set(tickers))
+        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'GOOGL', 'AMZN'}
+    return list(tickers)
 
 def calculate_rsi(series, periods=14):
     delta = series.diff()
@@ -42,11 +52,15 @@ def process_stock_data(ticker, info, history):
         "Үзүүлэлт": ["RSI (Хүч)", "Үнэлгээ (P/E)", "Өсөлт"], 
         "Оноо": [max(0, 100 - rsi), pe_score, max(0, min(100, growth_pot))]
     })
-    return {"Тикер": ticker, "Компани": info.get('longName', ticker), "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), "Сигнал": signal, "signal_color": color, "Өсөх Боломж": f"{growth_pot}%", "history_df": history, "radar": radar_df}
+    return {
+        "Тикер": ticker, "Компани": info.get('longName', ticker), 
+        "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), 
+        "Сигнал": signal, "signal_color": color, 
+        "Өсөх Боломж": f"{growth_pot}%", "history_df": history, "radar": radar_df
+    }
 
 def get_screened_data(strat, sector_sel):
     screened = []
-    # [:] болгосноор бүх 3100+ хувьцааг шүүнэ
     for t in get_all_us_tickers()[:]: 
         try:
             s = yf.Ticker(t)
@@ -63,7 +77,7 @@ strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Х�
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
 
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
-    with st.spinner("Бүх хувьцааг шүүж байна..."):
+    with st.spinner("Хувьцаануудыг шүүж байна..."):
         st.session_state.data = get_screened_data(strategy, sector)
 
 if 'data' in st.session_state and st.session_state.data:
@@ -79,7 +93,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
-            # ЭНД ХОЁР ЦЭГИЙН ХОЙНО ЗАЙГҮЙ БИЧИВ (:green, :lightgreen гэх мэт)
+            # Энд зайгүй бичсэн тул өнгө заавал гарна:
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['Өсөх Боломж']}**")
         with tab2:
