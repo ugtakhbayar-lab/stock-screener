@@ -11,8 +11,10 @@ if 'watchlist' not in st.session_state:
 if 'selected_ticker' not in st.session_state:
     st.session_state.selected_ticker = None
 
-@st.cache_data(ttl=1)
+@st.cache_data(ttl=3600)
 def get_all_us_tickers():
+    # ЭНД ХУВЬЦААНЫ ЖАГСААЛТАА БОДИТООР ТАТАХ
+    # Хэрэв Википедиа дээр алдаа гарвал таны апп гацахгүйн тулд ийм байна
     tickers = set()
     try:
         urls = [
@@ -25,8 +27,8 @@ def get_all_us_tickers():
             df = pd.read_html(url)[0]
             col = 'Symbol' if 'Symbol' in df.columns else 'Ticker'
             tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
-    except:
-        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'PLTR', 'SOFI'}
+    except Exception as e:
+        st.error(f"Дата татахад алдаа гарлаа: {e}")
     return list(tickers)
 
 def get_stock_data(ticker, strategy):
@@ -41,9 +43,11 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice', 0)
         current = info.get('currentPrice', 1)
         growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
+        
         if strategy == "1. Төгс боломж" and not (0 < pe < 30): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and 50 > 75: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 40 and growth > 0.1): return None
+        
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": growth_pot, "signal_color": "green"}
     except: return None
@@ -53,25 +57,33 @@ strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2
 
 if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     all_tickers = get_all_us_tickers()
+    total_count = len(all_tickers)
     data = []
-    total = len(all_tickers)
-    st.write(f"Нийт {total} хувьцааг шүүж байна...") # Шүүж буй тоог харуулах
+    
+    # ЭНД БОДИТ ХУВЬЦААНЫ ТООГ ХАРУУЛНА
+    st.write(f"🌐 Жагсаалтад нийт {total_count} хувьцаа байна. Шүүж эхэллээ...")
+    
     progress_bar = st.progress(0)
     for i, t in enumerate(all_tickers):
         res = get_stock_data(t, strategy)
         if res: data.append(res)
-        progress_bar.progress((i + 1) / total)
+        progress_bar.progress((i + 1) / total_count)
+        
     st.session_state.data = data
+    st.success(f"✅ Шүүлт дууслаа! {len(data)} хувьцаа шалгуурт тэнцлээ.")
 
 if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
-    st.subheader(f"🔍 Олдсон хувьцааны тоо: {len(df)}") # Шүүгдсэн үр дүнг харуулах
+    st.subheader("🔍 Хүснэгтээс сонгох")
     event = st.dataframe(df[["Тикер", "Компани"]], use_container_width=True, on_select="rerun", selection_mode="single-row")
+    
     if event.selection["rows"]:
         st.session_state.selected_ticker = df.iloc[event.selection["rows"][0]]["Тикер"]
+
     if st.session_state.selected_ticker:
         stock = next(item for item in st.session_state.data if item["Тикер"] == st.session_state.selected_ticker)
         st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
+        
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
@@ -83,5 +95,3 @@ if 'data' in st.session_state and st.session_state.data:
             st.plotly_chart(fig, use_container_width=True)
         with tab3:
             st.plotly_chart(px.line(stock['hist'], y='Close'), use_container_width=True)
-else:
-    st.info("Стратегиа сонгоод 'БҮХ ХУВЬЦААГ ШҮҮХ' товчийг дарна уу.")
