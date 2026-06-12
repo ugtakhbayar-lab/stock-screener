@@ -6,15 +6,11 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
 
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = set()
-if 'selected_ticker' not in st.session_state:
-    st.session_state.selected_ticker = None
+if 'watchlist' not in st.session_state: st.session_state.watchlist = set()
+if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker = None
 
 @st.cache_data(ttl=3600)
 def get_all_us_tickers():
-    # ЭНД ХУВЬЦААНЫ ЖАГСААЛТАА БОДИТООР ТАТАХ
-    # Хэрэв Википедиа дээр алдаа гарвал таны апп гацахгүйн тулд ийм байна
     tickers = set()
     try:
         urls = [
@@ -24,7 +20,8 @@ def get_all_us_tickers():
             'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
         ]
         for url in urls:
-            df = pd.read_html(url)[0]
+            # Алдаагүй болохын тулд flavor='bs4' нэмсэн
+            df = pd.read_html(url, flavor='bs4')[0]
             col = 'Symbol' if 'Symbol' in df.columns else 'Ticker'
             tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
     except Exception as e:
@@ -59,16 +56,12 @@ if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     all_tickers = get_all_us_tickers()
     total_count = len(all_tickers)
     data = []
-    
-    # ЭНД БОДИТ ХУВЬЦААНЫ ТООГ ХАРУУЛНА
     st.write(f"🌐 Жагсаалтад нийт {total_count} хувьцаа байна. Шүүж эхэллээ...")
-    
     progress_bar = st.progress(0)
     for i, t in enumerate(all_tickers):
         res = get_stock_data(t, strategy)
         if res: data.append(res)
         progress_bar.progress((i + 1) / total_count)
-        
     st.session_state.data = data
     st.success(f"✅ Шүүлт дууслаа! {len(data)} хувьцаа шалгуурт тэнцлээ.")
 
@@ -76,18 +69,15 @@ if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
     st.subheader("🔍 Хүснэгтээс сонгох")
     event = st.dataframe(df[["Тикер", "Компани"]], use_container_width=True, on_select="rerun", selection_mode="single-row")
-    
     if event.selection["rows"]:
         st.session_state.selected_ticker = df.iloc[event.selection["rows"][0]]["Тикер"]
-
     if st.session_state.selected_ticker:
         stock = next(item for item in st.session_state.data if item["Тикер"] == st.session_state.selected_ticker)
         st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
-        
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГ АРИЛГАВ:
+            # ЯГ ЭНД ЗАЙГ АРИЛГАСАН: :{stock
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
