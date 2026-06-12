@@ -1,4 +1,7 @@
-streamlit
-yfinance
 pandas
+yfinance
+streamlit
 plotly
+lxml
+beautifulsoup4
+html5lib
