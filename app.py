@@ -222,7 +222,7 @@ else:
         )
         
         st.info(f"""
-        * **Салбар:** {selected_stock['Sалбар']} | **Одоогийн RSI:** {selected_stock['RSI']}
+        * **Салбар:** {selected_stock['Салбар']} | **Одоогийн RSI:** {selected_stock['RSI']}
         * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} | **Доод таамаг:** ${selected_stock['low_target']}
         """)
         
