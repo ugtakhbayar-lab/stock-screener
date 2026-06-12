@@ -4,9 +4,16 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
-st.title("📈 Үнийн Таамаглалтай Ухаалаг Хувьцаа Шүүгч")
 
-st.write("3,100+ компанийг шинжилж, цаашдын өсөх магадлалыг тооцоолж байна...")
+# ХАЖУУГИЙН ЦЭСЭНД СТРАТЕГИ СОНГОХ ХЭСЭГ ХИЙХ
+st.sidebar.title("⚙️ Шүүлтүүрийн Тохиргоо")
+strategy = st.sidebar.radio(
+    "Хөрөнгө оруулалтын стратеги сонгох:",
+    ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)")
+)
+
+st.title("📈 Хос Стратегит Ухаалаг Хувьцаа Шүүгч")
+st.write(f"Яг одоо сонгосон стратеги: **{strategy}**")
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
@@ -38,7 +45,7 @@ def calculate_rsi(series, periods=14):
     return 100 - (100 / (1 + rs))
 
 @st.cache_data(ttl=3600)
-def get_screened_data():
+def get_screened_data(strat_selection):
     screened = []
     progress_bar = st.progress(0)
     total = len(TICKERS)
@@ -52,63 +59,74 @@ def get_screened_data():
             pb = info.get('priceToBook')
             current_price = info.get('currentPrice')
             
+            # Суурь шалгуур: P/B < 5
             if pb and pb < 5 and current_price:
                 history = stock.history(period="3mo")
                 if len(history) >= 30:
-                    # 1. ЗӨВХӨН АРИЛЖААНЫ ӨДРҮҮДИЙГ СУНГАЖ АВАХ
                     close_prices = history['Close'].dropna()
-                    
                     rsi_series = calculate_rsi(close_prices)
                     current_rsi = rsi_series.iloc[-1]
                     
-                    # ШАЛГУУР 1: RSI < 55 (Хэт өсөөгүй, аюулгүй байх)
-                    if pd.notna(current_rsi) and current_rsi < 55:
+                    # ШАЛГАРУУЛАЛТЫН ЛОГИК
+                    is_match = False
+                    
+                    if strat_selection == "1. Төгс боломж (Хатуу шалгуур)":
+                        # RSI < 55 БОЛОН сүүлийн 3 арилжааны өдөр дараалан өссөн байх
+                        if pd.notna(current_rsi) and current_rsi < 55:
+                            trading_days_3 = close_prices.tail(3).tolist()
+                            if len(trading_days_3) == 3 and trading_days_3[2] > trading_days_3[1] and trading_days_3[1] > trading_days_3[0]:
+                                is_match = True
+                                mom_score = max(10, min(100, int((70 - current_rsi) * 2)))
+                                
+                    else: # 2. Уян хатан шалгуур
+                        # RSI нь эрүүл бүст (30-65) БОЛОН SMA 5 > SMA 20 (Ерөнхий өсөлт эхэлсэн)
+                        if pd.notna(current_rsi) and 30 <= current_rsi <= 65:
+                            sma_5 = close_prices.tail(5).mean()
+                            sma_20 = close_prices.tail(20).mean()
+                            if sma_5 > sma_20:
+                                is_match = True
+                                mom_score = max(10, min(100, int((75 - current_rsi) * 1.5)))
+
+                    if is_match:
+                        target_price = info.get('targetMeanPrice')
+                        potential_growth = "N/A"
+                        if target_price:
+                            potential_growth = round(((target_price - current_price) / current_price) * 100, 1)
                         
-                        # ШАЛГУУР 2: Сүүлийн 3 арилжааны өдөр дараалан үнэ өссөн байх
-                        trading_days_3 = close_prices.tail(3).tolist()
+                        current_pe = pe if pe else 40
+                        val_score = max(10, min(100, int((60 - current_pe) * 2)))
+                        growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
+                        health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
                         
-                        if len(trading_days_3) == 3 and trading_days_3[2] > trading_days_3[1] and trading_days_3[1] > trading_days_3[0]:
-                            
-                            target_price = info.get('targetMeanPrice')
-                            potential_growth = "N/A"
-                            
-                            if target_price:
-                                potential_growth = round(((target_price - current_price) / current_price) * 100, 1)
-                            
-                            current_pe = pe if pe else 35
-                            val_score = max(10, min(100, int((50 - current_pe) * 2.5)))
-                            mom_score = max(10, min(100, int((70 - current_rsi) * 2))) 
-                            growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
-                            health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
-                            
-                            screened.append({
-                                "Тикер": ticker,
-                                "Компани": info.get('longName', ticker),
-                                "Өнөөгийн Үнэ": f"${current_price}",
-                                "Шинжээчдийн Таамаг": f"${target_price}" if target_price else "N/A",
-                                "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
-                                "P/E": round(pe, 2) if pe else "N/A",
-                                "RSI": round(current_rsi, 1),
-                                "potential_raw": potential_growth if potential_growth != "N/A" else -999,
-                                "high_target": info.get('targetHighPrice', current_price),
-                                "low_target": info.get('targetLowPrice', current_price),
-                                "radar": [
-                                    {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
-                                    {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
-                                    {"Үзүүлэлт": "Орлого", "Оноо": growth},
-                                    {"Үзүүлэлт": "Эрүүл мэнд", "Оноо": health}
-                                ]
-                            })
+                        screened.append({
+                            "Тикер": ticker,
+                            "Компани": info.get('longName', ticker),
+                            "Өнөөгийн Үнэ": f"${current_price}",
+                            "Шинжээчдийн Таамаг": f"${target_price}" if target_price else "N/A",
+                            "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
+                            "P/E": round(pe, 2) if pe else "N/A",
+                            "RSI": round(current_rsi, 1),
+                            "potential_raw": potential_growth if potential_growth != "N/A" else -999,
+                            "high_target": info.get('targetHighPrice', current_price),
+                            "low_target": info.get('targetLowPrice', current_price),
+                            "radar": [
+                                {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
+                                {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
+                                {"Үзүүлэлт": "Орлого", "Оноо": growth},
+                                {"Үзүүлэлт": "Эрүүл мэнд", "Оноо": health}
+                            ]
+                        })
         except:
             continue
             
     progress_bar.empty()
     return screened
 
-data = get_screened_data()
+# Сонгосон стратегиар датаг шүүх
+data = get_screened_data(strategy)
 
 if not data:
-    st.warning("Яг одоо энэ шалгуурт (RSI < 55 ба сүүлийн 3 арилжааны өдөр өссөн) тэнцэх хувьцаа олдсонгүй.")
+    st.warning("Яг одоо энэ сонгосон шалгуурт тэнцэх хувьцаа олдсонгүй.")
 else:
     df = pd.DataFrame(data)
     df = df.sort_values(by="potential_raw", ascending=False)
