@@ -55,23 +55,24 @@ def get_screened_data():
             if pb and pb < 5 and current_price:
                 history = stock.history(period="3mo")
                 if len(history) >= 30:
-                    close_prices = history['Close']
+                    # 1. ЗӨВХӨН АРИЛЖААНЫ ӨДРҮҮДИЙГ СУНГАЖ АВАХ
+                    close_prices = history['Close'].dropna()
+                    
                     rsi_series = calculate_rsi(close_prices)
                     current_rsi = rsi_series.iloc[-1]
                     
-                    # Ханш хэт өсөөгүй (RSI < 55) үед
+                    # ШАЛГУУР 1: RSI < 55 (Хэт өсөөгүй, аюулгүй байх)
                     if pd.notna(current_rsi) and current_rsi < 55:
-                        last_3_days = close_prices.tail(3).tolist()
                         
-                        # Богино хугацааны дээшээ эргэсэн дохио
-                        if last_3_days[2] > last_3_days[1] and last_3_days[1] > last_3_days[0]:
+                        # ШАЛГУУР 2: Сүүлийн 3 арилжааны өдөр дараалан үнэ өссөн байх
+                        trading_days_3 = close_prices.tail(3).tolist()
+                        
+                        if len(trading_days_3) == 3 and trading_days_3[2] > trading_days_3[1] and trading_days_3[1] > trading_days_3[0]:
                             
-                            # УОЛЛ СТРИТИЙН ТААМАГЛАЛЫГ ТАТАХ
                             target_price = info.get('targetMeanPrice')
                             potential_growth = "N/A"
                             
                             if target_price:
-                                # Цаашид өсөх боломжтой хувийг бодох
                                 potential_growth = round(((target_price - current_price) / current_price) * 100, 1)
                             
                             current_pe = pe if pe else 35
@@ -107,10 +108,9 @@ def get_screened_data():
 data = get_screened_data()
 
 if not data:
-    st.warning("Яг одоо энэ шалгуурт тэнцэх хувьцаа олдсонгүй.")
+    st.warning("Яг одоо энэ шалгуурт (RSI < 55 ба сүүлийн 3 арилжааны өдөр өссөн) тэнцэх хувьцаа олдсонгүй.")
 else:
     df = pd.DataFrame(data)
-    # Өсөх магадлал өндөртэйг нь хамгийн дээр гаргаж эрэмбэлнэ
     df = df.sort_values(by="potential_raw", ascending=False)
     
     col1, col2 = st.columns([1.2, 0.8])
@@ -122,8 +122,6 @@ else:
         
     with col2:
         selected_stock = next(item for item in data if item["Тикер"] == selected_ticker)
-        
-        # ҮНЭ ХЭД ХҮРЭХ ТУХАЙ МЭДЭЭЛЛИЙГ ХАРУУЛАХ ХЭСЭГ
         st.subheader(f"📊 {selected_ticker} Үнийн Таамаглал")
         st.metric(label="Шинжээчдийн дундаж бай (Target)", value=selected_stock["Шинжээчдийн Таамаг"], delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай")
         
