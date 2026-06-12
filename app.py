@@ -37,7 +37,6 @@ def get_stock_data(ticker, strategy):
         pe = info.get('trailingPE', 0) or 0
         fpe = info.get('forwardPE', 0) or 0
         growth = info.get('revenueGrowth', 0) or 0
-        
         target = info.get('targetMeanPrice', 0)
         current = info.get('currentPrice', 1)
         growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
@@ -63,7 +62,6 @@ if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     data = []
     total = len(all_tickers)
     progress_bar = st.progress(0)
-    # ЭНД ХЯЗГААРЛАЛТГҮЙ БҮХ ХУВЬЦААГ ШҮҮНЭ
     for i, t in enumerate(all_tickers):
         res = get_stock_data(t, strategy)
         if res: data.append(res)
@@ -86,7 +84,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЗАЙГҮЙ БИЧИХ ДҮРЭМ (ЭНД ЗАЙ БАЙХГҮЙ)
+            # ЭНД ЗАЙГҮЙ БИЧСЭН ТУЛ РАДАР ГРАФИК ХАРАГДАНА
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
