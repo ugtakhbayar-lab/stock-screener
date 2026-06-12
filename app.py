@@ -42,17 +42,12 @@ def process_stock_data(ticker, info, history):
         "Үзүүлэлт": ["RSI (Хүч)", "Үнэлгээ (P/E)", "Өсөлт"], 
         "Оноо": [max(0, 100 - rsi), pe_score, max(0, min(100, growth_pot))]
     })
-    return {
-        "Тикер": ticker, "Компани": info.get('longName', ticker), 
-        "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), 
-        "Сигнал": signal, "signal_color": color, 
-        "Өсөх Боломж": f"{growth_pot}%",
-        "history_df": history, "radar": radar_df
-    }
+    return {"Тикер": ticker, "Компани": info.get('longName', ticker), "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), "Сигнал": signal, "signal_color": color, "Өсөх Боломж": f"{growth_pot}%", "history_df": history, "radar": radar_df}
 
 def get_screened_data(strat, sector_sel):
     screened = []
-    for t in get_all_us_tickers()[:100]: # Урт хугацаа авахгүйн тулд 100-аар хязгаарлав
+    # [:] болгосноор бүх 3100+ хувьцааг шүүнэ
+    for t in get_all_us_tickers()[:]: 
         try:
             s = yf.Ticker(t)
             hist = s.history(period="1y")
@@ -68,7 +63,7 @@ strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Х�
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
 
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
-    with st.spinner("Хувьцааг шүүж байна..."):
+    with st.spinner("Бүх хувьцааг шүүж байна..."):
         st.session_state.data = get_screened_data(strategy, sector)
 
 if 'data' in st.session_state and st.session_state.data:
@@ -84,6 +79,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
+            # ЭНД ХОЁР ЦЭГИЙН ХОЙНО ЗАЙГҮЙ БИЧИВ (:green, :lightgreen гэх мэт)
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['Өсөх Боломж']}**")
         with tab2:
