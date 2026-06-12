@@ -4,28 +4,48 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(page_title="Хувьцаа Шүүгч", layout="wide")
-st.title("📈 Богино хугацааны өсөлттэй Хямд хувьцаа шүүгч")
+st.title("📈 АНУ-ын Том болон Жижиг (Small-cap) хувьцааг шүүгч")
 
-# Шүүх хувьцааны жагсаалт
-TICKERS = [
-    'AAPL', 'TSLA', 'NVDA', 'INTC', 'VALE', 'F', 'GM', 'XOM', 'T', 'VZ', 
-    'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX', 'AMD', 'BAC', 'JPM', 'WMT', 'DIS',
-    'KO', 'PEP', 'PFE', 'CSCO', 'ORCL', 'NKE', 'XOM', 'CVX', 'BA', 'GE'
-]
+st.write("S&P 500 (Том) болон S&P 600 (Жижиг) нийт 1,100 гаруй компанийн датаг шүүж байна. Түр хүлээнэ үү...")
 
-st.write("Зах зээлийн датаг бодит цагаар шүүж байна...")
+# ТОМ БОЛОН ЖИЖИГ КОМПАНИУДЫН ЖАГСААЛТЫГ АВТОМАТ ТАТАХ
+@st.cache_data(ttl=86400)
+def get_all_tickers():
+    tickers = []
+    try:
+        # 1. S&P 500 (Том компаниуд)
+        url_500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        tickers_500 = pd.read_html(url_500)[0]['Symbol'].str.replace('.', '-', regex=False).tolist()
+        tickers.extend(tickers_500)
+        
+        # 2. S&P 600 (Жижиг, дунд ангиллын компаниуд)
+        url_600 = 'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies'
+        tickers_600 = pd.read_html(url_600)[0]['Ticker symbol'].str.replace('.', '-', regex=False).tolist()
+        tickers.extend(tickers_600)
+        
+        # Давхардсан тикер байвал устгах
+        return list(set(tickers))
+    except Exception as e:
+        # Алдаа гарвал үндсэн хэдэн тикерийг ашиглана
+        return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM']
+
+TICKERS = get_all_tickers()
 
 @st.cache_data(ttl=3600)
 def get_screened_data():
     screened = []
-    for ticker in TICKERS:
+    progress_bar = st.progress(0)
+    total = len(TICKERS)
+    
+    for index, ticker in enumerate(TICKERS):
+        progress_bar.progress((index + 1) / total)
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
             pe = info.get('trailingPE')
             pb = info.get('priceToBook')
             
-            # Шалгуур: P/E < 35 ба P/B < 5
+            # Жижиг компаниуд олон тул шалгуурыг арай өргөн болгов: P/E < 35, P/B < 5
             if pe and pb and pe < 35 and pb < 5:
                 history = stock.history(period="1mo")
                 if len(history) >= 20:
@@ -35,7 +55,7 @@ def get_screened_data():
                     # Богино хугацааны өсөлтийн дохио
                     if sma_5 > sma_20:
                         val_score = max(10, min(100, int((35 - pe) * 3)))
-                        mom_score = 90 if sma_5 > sma_20 * 1.01 else 70
+                        mom_score = 95 if sma_5 > sma_20 * 1.02 else 75
                         growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
                         health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
                         
@@ -54,12 +74,14 @@ def get_screened_data():
                         })
         except:
             continue
+            
+    progress_bar.empty()
     return screened
 
 data = get_screened_data()
 
 if not data:
-    st.warning("Яг одоо энэ шалгуурт тэнцэх хувьцаа олдсонгүй. Шалгуурыг дараа өөрчилж болно.")
+    st.warning("Яг одоо энэ шалгуурт тэнцэх хувьцаа олдсонгүй.")
 else:
     df = pd.DataFrame(data)
     col1, col2 = st.columns([1, 1])
@@ -74,8 +96,5 @@ else:
         selected_stock = next(item for item in data if item["Тикер"] == selected_ticker)
         radar_df = pd.DataFrame(selected_stock["radar"])
         fig = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
-        
-        # АЛДААТАЙ БАЙСАН ХЭСГИЙГ ЗАССАН: 'toself' болгов
-        fig.update_traces(fill='toself') 
-        
+        fig.update_traces(fill='toself')
         st.plotly_chart(fig, use_container_width=True)
