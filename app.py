@@ -213,7 +213,7 @@ else:
         
         st.subheader(f"📊 {selected_ticker} Хянах Самбар")
         
-        # 🌟 ШИНЭЧЛЭЛТ: БАРУУН ТАЛЫГ ТАВ (TABS) ХУУДАС БОЛГОЖ НЭГ ДЭЛГЭЦЭНД БАГТААХ
+        # БАРУУН ТАЛЫГ ТАВ (TABS) ХУУДАС БОЛГОЖ НЭГ ДЭЛГЭЦЭНД БАГТААХ
         tab1, tab2, tab3 = st.tabs(["💡 Автомат Зөвлөх", "📉 Ханшны График", "🕸️ СУУРЬ РАДАР"])
         
         with tab1:
@@ -234,11 +234,11 @@ else:
             hist_df = selected_stock["history_df"].reset_index()
             fig_line = px.line(hist_df, x='Date', y='Close', title=f"{selected_ticker} Сүүлийн 3 сар")
             fig_line.update_layout(xaxis_title="Огноо", yaxis_title="Үнэ ($)", margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_line, use_container_width=True)
+            st.plotly_chart(fig_line, use_container_width=True) # ЗАСВАР: fig_line дамжуулсан
             
         with tab3:
             radar_df = pd.DataFrame(selected_stock["radar"])
             fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
             fig_radar.update_traces(fill='toself')
             fig_radar.update_layout(margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_radar, use_container_width=True)
+            st.plotly_chart(fig_radar, use_container_width=True) # ЗАСВАР: fig_radar дамжуулсан
