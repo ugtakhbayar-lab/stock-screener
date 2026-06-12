@@ -21,14 +21,21 @@ def process_stock_data(ticker, info, history):
     close = history['Close'].dropna()
     rsi = calculate_rsi(close).iloc[-1] if len(close) > 14 else 50
     pe = info.get('trailingPE', 20)
-    if rsi < 35: signal, color = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ", "green"
-    elif rsi < 55: signal, color = "✅ ХУДАТДАЖ АВАХ", "lightgreen"
+    target = info.get('targetMeanPrice', 0)
+    current = info.get('currentPrice', 1)
+    growth_pot = max(0, min(100, ((target - current) / current) * 100))
+    
+    # "ХУДАЛДАЖ АВАХ" гэж зөв бичив
+    if rsi < 35: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
+    elif rsi < 55: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
     
+    # РАДАРЫН ШАЛГУУР (Энд өөрийн хүссэнээр өөрчлөх боломжтой)
     radar_df = pd.DataFrame({
-        "Үзүүлэлт": ["RSI", "P/E Үнэлгээ", "Хүч чадал"], 
-        "Оноо": [rsi, min(pe, 100), 70]
+        "Үзүүлэлт": ["RSI (Хүч)", "Үнэлгээ (P/E)", "Өсөлтийн Боломж"], 
+        "Оноо": [max(0, 100 - rsi), max(0, 100 - min(pe, 100)), growth_pot]
     })
+    
     return {
         "Тикер": ticker, "Компани": info.get('longName', ticker), 
         "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), 
@@ -73,6 +80,8 @@ if 'data' in st.session_state and st.session_state.data:
         with tab2:
             st.plotly_chart(px.line(stock['history_df'], y='Close'), use_container_width=True)
         with tab3:
-            st.plotly_chart(px.line_polar(stock['radar'], r='Оноо', theta='Үзүүлэлт', line_close=True), use_container_width=True)
+            fig = px.line_polar(stock['radar'], r='Оноо', theta='Үзүүлэлт', line_close=True)
+            fig.update_traces(fill='toself')
+            st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Стратегиа сонгоод 'Хувьцааг Шүүх' товчийг дарна уу.")
