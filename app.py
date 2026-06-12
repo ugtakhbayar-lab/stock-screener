@@ -6,11 +6,11 @@ import plotly.express as px
 # 1. Хуудасны тохиргоо
 st.set_page_config(page_title="Pro Stock Analyst v2.0", layout="wide", initial_sidebar_state="expanded")
 
-# --- SESSION STATE ЭХЛҮҮЛЭХ ---
+# --- SESSION STATE ---
 if 'results' not in st.session_state: st.session_state.results = []
 if 'watchlist' not in st.session_state: st.session_state.watchlist = []
 
-# 2. Дата татах функцүүд
+# 2. Дата татах
 @st.cache_data(ttl=3600)
 def get_all_us_tickers():
     try:
@@ -36,7 +36,6 @@ def get_stock_data(ticker, strategy, sector_name):
         s = yf.Ticker(ticker)
         info = s.info
         if not info: return None
-        
         current_sector = info.get('sector', 'Unknown')
         if sector_name != "All" and sector_name != current_sector: return None
 
@@ -84,10 +83,9 @@ if st.sidebar.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
     st.session_state.results = results
     st.rerun()
 
-# --- ҮР ДҮН (Аюулгүй арга) ---
+# --- ҮР ДҮН ---
 if st.session_state.results:
     df_res = pd.DataFrame(st.session_state.results)
-    # Зөвхөн байгаа багануудыг сонгох
     required_cols = ["Тикер", "Компани", "Sector", "rsi", "price", "growth_pot"]
     display_df = df_res.reindex(columns=required_cols).fillna("N/A")
     
@@ -98,22 +96,19 @@ if st.session_state.results:
         if idx < len(st.session_state.results):
             stock = st.session_state.results[idx]
             st.divider()
-            col_main, col_news = st.columns([2, 1])
-            with col_main:
+            col1, col2 = st.columns([2, 1])
+            with col1:
                 st.header(f"{stock.get('Тикер', 'N/A')} - {stock.get('Компани', 'N/A')}")
                 if st.button("⭐ Watchlist-д нэмэх"):
                     if stock not in st.session_state.watchlist: st.session_state.watchlist.append(stock)
-                
-                # Үнийн график
                 hist = yf.Ticker(stock.get('Тикер', '')).history(period="3mo")
                 if not hist.empty: st.line_chart(hist['Close'])
-                
-                # Радар
-                if 'radar_df' in stock:
-                    st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
-            with col_news:
+                if 'radar_df' in stock: st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
+            with col2:
                 st.subheader("📰 Сүүлийн мэдээ")
                 for n in stock.get('news', []): st.markdown(f"**[{n.get('title', 'Мэдээ')}]({n.get('link', '#')})**")
+else:
+    st.info("Шинжилгээг эхлүүлэхийн тулд Sidebar-аас тохиргоогоо хийж 'ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ' товчийг дарна уу.")
 
 if st.session_state.watchlist:
     st.divider()
