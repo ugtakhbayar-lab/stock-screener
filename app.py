@@ -6,7 +6,12 @@ import plotly.express as px
 st.set_page_config(page_title="Хувьцаа Шүүгч", layout="wide")
 st.title("📈 Богино хугацааны өсөлттэй Хямд хувьцаа шүүгч")
 
-TICKERS = ['AAPL', 'TSLA', 'NVDA', 'INTC', 'VALE', 'F', 'GM', 'XOM', 'T', 'VZ', 'MSFT', 'GOOGL']
+# Шүүх хувьцааны жагсаалтыг 30 болгож ИХЭСГЭВ (Илүү олон сонголттой болгов)
+TICKERS = [
+    'AAPL', 'TSLA', 'NVDA', 'INTC', 'VALE', 'F', 'GM', 'XOM', 'T', 'VZ', 
+    'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX', 'AMD', 'BAC', 'JPM', 'WMT', 'DIS',
+    'KO', 'PEP', 'PFE', 'CSCO', 'ORCL', 'NKE', 'XOM', 'CVX', 'BA', 'GE'
+]
 
 st.write("Зах зээлийн датаг бодит цагаар шүүж байна...")
 
@@ -20,15 +25,17 @@ def get_screened_data():
             pe = info.get('trailingPE')
             pb = info.get('priceToBook')
             
-            if pe and pb and pe < 25 and pb < 3:
+            # Шалгуурыг арай уян хатан болгов: P/E < 35 ба P/B < 5
+            if pe and pb and pe < 35 and pb < 5:
                 history = stock.history(period="1mo")
                 if len(history) >= 20:
                     sma_5 = history['Close'].tail(5).mean()
                     sma_20 = history['Close'].tail(20).mean()
                     
+                    # Богино хугацааны өсөлтийн дохио
                     if sma_5 > sma_20:
-                        val_score = max(10, min(100, int((25 - pe) * 4)))
-                        mom_score = 90 if sma_5 > sma_20 * 1.02 else 70
+                        val_score = max(10, min(100, int((35 - pe) * 3)))
+                        mom_score = 90 if sma_5 > sma_20 * 1.01 else 70
                         growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
                         health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
                         
@@ -52,13 +59,13 @@ def get_screened_data():
 data = get_screened_data()
 
 if not data:
-    st.warning("Яг одоо шалгуурт тэнцэх хувьцаа олдсонгүй.")
+    st.warning("Яг одоо энэ шалгуурт тэнцэх хувьцаа олдсонгүй. Шалгуурыг дараа өөрчилж болно.")
 else:
     df = pd.DataFrame(data)
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        st.subheader("Шалгуурт тэнцсэн хувьцаанууд")
+        st.subheader(f"Шалгуурт тэнцсэн хувьцаанууд ({len(df)} олдлоо)")
         selected_ticker = st.selectbox("Шинжлэх хувьцааг сонгоно уу:", df["Тикер"].tolist())
         st.dataframe(df[["Тикер", "Компани", "Үнэ", "P/E", "P/B"]], use_container_width=True)
         
