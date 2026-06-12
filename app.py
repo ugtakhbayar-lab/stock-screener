@@ -13,7 +13,6 @@ if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker =
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
     tickers = set()
-    # S&P 500 болон Russell 2000-ийн жагсаалтыг нэгтгэх
     urls = [
         "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv",
         "https://raw.githubusercontent.com/datasets/russell-2000/master/data/constituents.csv"
@@ -21,7 +20,8 @@ def get_all_us_tickers():
     for url in urls:
         try:
             df = pd.read_csv(url)
-            tickers.update(df['Symbol'].tolist())
+            # Symbol гэсэн баганыг л авна
+            tickers.update(df['Symbol'].astype(str).tolist())
         except: continue
     return [t.replace('.', '-') for t in list(tickers)]
 
@@ -38,7 +38,6 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice') or 0
         current = info.get('currentPrice') or 1
         
-        # Шүүлтүүрийн хатуу логик (Өмнөх шигээ)
         if strategy == "1. Төгс боломж" and not (0 < pe < 20 and growth > 0.1): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.1: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 25 and growth > 0.2): return None
@@ -47,7 +46,6 @@ def get_stock_data(ticker, strategy):
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": round(((target - current) / current) * 100, 1), "signal_color": "green"}
     except: return None
 
-# UI
 st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 
@@ -77,7 +75,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГ БҮР МӨСӨН УСТГАВ: : гэсний дараа шууд {stock...
+            # Энд яг зайгүй болгосон:
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
