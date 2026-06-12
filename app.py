@@ -12,13 +12,18 @@ if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker =
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
-    try:
-        df = pd.read_csv(url)
-        tickers = df['Symbol'].tolist()
-        return [t.replace('.', '-') for t in tickers]
-    except:
-        return ['AAPL', 'MSFT', 'NVDA', 'AMD', 'TSLA', 'GOOGL', 'AMZN', 'META', 'NFLX', 'PLTR', 'SOFI']
+    tickers = set()
+    # S&P 500 болон Russell 2000-ийн жагсаалтыг нэгтгэх
+    urls = [
+        "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv",
+        "https://raw.githubusercontent.com/datasets/russell-2000/master/data/constituents.csv"
+    ]
+    for url in urls:
+        try:
+            df = pd.read_csv(url)
+            tickers.update(df['Symbol'].tolist())
+        except: continue
+    return [t.replace('.', '-') for t in list(tickers)]
 
 def get_stock_data(ticker, strategy):
     s = yf.Ticker(ticker)
@@ -32,17 +37,17 @@ def get_stock_data(ticker, strategy):
         growth = info.get('revenueGrowth') or 0
         target = info.get('targetMeanPrice') or 0
         current = info.get('currentPrice') or 1
-        growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
         
-        # Шүүлтүүрийг хатууруулсан
+        # Шүүлтүүрийн хатуу логик (Өмнөх шигээ)
         if strategy == "1. Төгс боломж" and not (0 < pe < 20 and growth > 0.1): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.1: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 25 and growth > 0.2): return None
         
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
-        return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": growth_pot, "signal_color": "green"}
+        return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": round(((target - current) / current) * 100, 1), "signal_color": "green"}
     except: return None
 
+# UI
 st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 
@@ -60,7 +65,6 @@ if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
 
 if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
-    st.subheader("🔍 Хүснэгтээс сонгох")
     event = st.dataframe(df[["Тикер", "Компани"]], use_container_width=True, on_select="rerun", selection_mode="single-row")
     
     if event.selection["rows"]:
@@ -73,7 +77,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГ УСТГАВ (":{stock" гэж зайгүй байна)
+            # ЯГ ЭНД ЗАЙГ БҮР МӨСӨН УСТГАВ: : гэсний дараа шууд {stock...
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
