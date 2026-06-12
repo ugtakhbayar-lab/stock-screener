@@ -278,17 +278,11 @@ else:
                 margin=dict(l=50, r=50, t=50, b=50)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
-    with tab1:
-        # ... (Зөвлөхийн код) ...
-        
-    with tab2:
-        # ... (Графикийн код) ...
-        
-    with tab3:
-        # РАДАР ГРАФИКИЙГ ЗӨВ ХАРУУЛАХ ТОХИРГОО
-        radar_df = pd.DataFrame(selected_stock["radar"])
-        fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
-        fig_radar.update_traces(fill='toself')
-        # Өндөр өргөнийг хатуу зааж өгөхөд график ил гарна
-        fig_radar.update_layout(height=400, margin=dict(l=40, r=40, t=40, b=40))
-        st.plotly_chart(fig_radar, use_container_width=True)
+ with tab3:
+    # РАДАР ГРАФИКИЙГ ЗӨВ ХАРУУЛАХ ТОХИРГОО
+    radar_df = pd.DataFrame(selected_stock["radar"])
+    fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
+    fig_radar.update_traces(fill='toself')
+    # Өндөр өргөнийг хатуу зааж өгөхөд график ил гарна
+    fig_radar.update_layout(height=400, margin=dict(l=40, r=40, t=40, b=40))
+    st.plotly_chart(fig_radar, use_container_width=True)
