@@ -89,17 +89,25 @@ if 'results' in st.session_state and len(st.session_state.results) > 0:
     st.download_button("💾 CSV татах", csv, "results.csv")
     
     # Сонгосон хувьцааны дэлгэрэнгүй
-    if selected.selection.rows: 
+    if selected.selection.rows:
         idx = selected.selection.rows[0]
         if idx < len(st.session_state.results):
             stock = st.session_state.results[idx]
             st.divider()
             st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
             st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
+            
             col1, col2 = st.columns(2)
             col1.metric("Үнэ", f"${stock['price']}")
             col2.metric("📈 Өсөх боломж", f"{stock['growth_pot']}%")
             
+            # 3 сарын үнийн график
+            st.subheader("📈 Сүүлийн 3 сарын үнийн хэлбэлзэл")
+            hist = yf.Ticker(stock['Тикер']).history(period="3mo")
+            if not hist.empty:
+                st.line_chart(hist['Close'])
+            
+            # Радар график
             if 'radar_df' in stock:
                 st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
 else:
