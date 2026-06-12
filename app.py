@@ -37,7 +37,6 @@ def get_stock_data(ticker, strategy, sector_name):
         info = s.info
         if not info: return None
         
-        # Салбараар шүүх
         current_sector = info.get('sector', 'Unknown')
         if sector_name != "All" and sector_name != current_sector: return None
 
@@ -85,10 +84,14 @@ if st.sidebar.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
     st.session_state.results = results
     st.rerun()
 
-# --- ҮР ДҮН ---
+# --- ҮР ДҮН (Аюулгүй арга) ---
 if st.session_state.results:
     df_res = pd.DataFrame(st.session_state.results)
-    selected = st.dataframe(df_res[["Тикер", "Компани", "Sector", "rsi", "price", "growth_pot"]], use_container_width=True, on_select="rerun", selection_mode="single-row")
+    # Зөвхөн байгаа багануудыг сонгох
+    required_cols = ["Тикер", "Компани", "Sector", "rsi", "price", "growth_pot"]
+    display_df = df_res.reindex(columns=required_cols).fillna("N/A")
+    
+    selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
     
     if selected.selection.rows:
         idx = selected.selection.rows[0]
@@ -97,15 +100,20 @@ if st.session_state.results:
             st.divider()
             col_main, col_news = st.columns([2, 1])
             with col_main:
-                st.header(f"{stock['Тикер']} - {stock['Компани']}")
+                st.header(f"{stock.get('Тикер', 'N/A')} - {stock.get('Компани', 'N/A')}")
                 if st.button("⭐ Watchlist-д нэмэх"):
-                    if stock['Тикер'] not in [s['Тикер'] for s in st.session_state.watchlist]:
-                        st.session_state.watchlist.append(stock)
-                st.line_chart(yf.Ticker(stock['Тикер']).history(period="3mo")['Close'])
-                st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
+                    if stock not in st.session_state.watchlist: st.session_state.watchlist.append(stock)
+                
+                # Үнийн график
+                hist = yf.Ticker(stock.get('Тикер', '')).history(period="3mo")
+                if not hist.empty: st.line_chart(hist['Close'])
+                
+                # Радар
+                if 'radar_df' in stock:
+                    st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
             with col_news:
                 st.subheader("📰 Сүүлийн мэдээ")
-                for n in stock['news']: st.markdown(f"**[{n['title']}]({n['link']})**")
+                for n in stock.get('news', []): st.markdown(f"**[{n.get('title', 'Мэдээ')}]({n.get('link', '#')})**")
 
 if st.session_state.watchlist:
     st.divider()
