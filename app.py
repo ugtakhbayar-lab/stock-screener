@@ -9,20 +9,20 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max"
 # 1. ХАЖУУГИЙН ЦЭС (SIDEBAR) - ТОХИРГООНУУД
 st.sidebar.title("⚙️ Ухаалаг Удирдах Цэс")
 
-# Стратеги сонгох
+# 🎯 Стратеги сонгох
 strategy = st.sidebar.radio(
     "Хөрөнгө оруулалтын стратеги:",
     ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)")
 )
 
-# Салбар сонгох шүүлтүүр
+# 🏢 Салбар сонгох шүүлтүүр
 sector_choice = st.sidebar.selectbox(
     "Салбараар шүүх:",
     ("Бүх салбар", "Technology", "Healthcare", "Financial Services", "Consumer Cyclical", "Industrials", "Energy")
 )
 
 st.sidebar.write("---")
-# Шууд тикерээр хайх талбар
+# 🔍 Шууд тикерээр хайх талбар
 search_ticker = st.sidebar.text_input("🔍 Шууд хувьцаа хайх (Жишээ нь: OSCR, AAPL):").upper().strip()
 
 st.title("📈 Хос Стратегит & Автомат Зөвлөхтэй Хувьцаа Шүүгч")
@@ -105,7 +105,7 @@ def process_stock_data(ticker, info, history):
         "potential_raw": potential_growth if potential_growth != "N/A" else -999,
         "high_target": info.get('targetHighPrice', current_price),
         "low_target": info.get('targetLowPrice', current_price),
-        "history_df": history, # График зурахад зориулж бүтэн түүхийг хадгална
+        "history_df": history, 
         "radar": [
             {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
             {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
@@ -161,7 +161,7 @@ def get_screened_data(strat_selection, sector_sel):
     progress_bar.empty()
     return screened
 
-# ХАЙЛТЫН ТАЛБАР АЖИЛЛАХ ЭСЭХИЙГ ШАЛГАХ
+# Хайлтын систем
 single_stock_view = None
 if search_ticker:
     try:
@@ -187,20 +187,19 @@ else:
     df = pd.DataFrame(show_data)
     df = df.sort_values(by="potential_raw", ascending=False)
     
-    col1, col2 = st.columns([1.2, 0.8])
+    col1, col2 = st.columns([1.1, 0.9])
     
     with col1:
         st.subheader(f"🔍 Жагсаалт ({len(df)} компани)")
         if not selected_ticker:
             selected_ticker = st.selectbox("Шинжлэх хувьцааг сонгоно уу:", df["Тикер"].tolist())
             
-        # Форматжуулж харуулах
         display_df = df.copy()
         display_df["Өнөөгийн Үнэ"] = display_df["Өнөөгийн Үнэ"].apply(lambda x: f"${x}")
         display_df["Шинжээчдийн Таамаг"] = display_df["Шинжээчдийн Таамаг"].apply(lambda x: f"${x}" if x > 0 else "N/A")
         st.dataframe(display_df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "Сигнал"]], use_container_width=True)
         
-        # 📥 EXCEL/CSV ТАТАЖ АВАХ ТОВЧЛУУР
+        # CSV татах товчлуур
         csv = df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "P/E", "P/B", "RSI", "Сигнал"]].to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Шүүсэн жагсаалтыг CSV файл болгож татах",
@@ -212,32 +211,34 @@ else:
     with col2:
         selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
         
-        st.subheader(f"📊 {selected_ticker} Автомат Зөвлөх")
-        st.markdown(f"**Арилжааны Дохио:** :{selected_stock['signal_color']}[{selected_stock['Сигнал']}]")
+        st.subheader(f"📊 {selected_ticker} Хянах Самбар")
         
-        st.metric(
-            label="Шинжээчдийн дундаж бай (Target)", 
-            value=f"${selected_stock['Шинжээчдийн Таамаг']}" if selected_stock['Шинжээчдийн Таамаг'] > 0 else "N/A", 
-            delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай"
-        )
+        # 🌟 ШИНЭЧЛЭЛТ: БАРУУН ТАЛЫГ ТАВ (TABS) ХУУДАС БОЛГОЖ НЭГ ДЭЛГЭЦЭНД БАГТААХ
+        tab1, tab2, tab3 = st.tabs(["💡 Автомат Зөвлөх", "📉 Ханшны График", "🕸️ СУУРЬ РАДАР"])
         
-        st.info(f"""
-        * **Салбар:** {selected_stock['Салбар']} | **Одоогийн RSI:** {selected_stock['RSI']}
-        * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} | **Доод таамаг:** ${selected_stock['low_target']}
-        """)
-        
-        # 📈 ШИНЭ: ҮНИЙН ТҮҮХИЙН ГРАФИК
-        st.write("---")
-        st.subheader("📉 Ханшны Хөдөлгөөн (Сүүлийн 3 сар)")
-        hist_df = selected_stock["history_df"].reset_index()
-        fig_line = px.line(hist_df, x='Date', y='Close', title=f"{selected_ticker} Үнийн түүх")
-        fig_line.update_layout(xaxis_title="Огноо", yaxis_title="Үнэ ($)")
-        st.plotly_chart(fig_line, use_container_width=True)
-        
-        # РАДАР ГРАФИК
-        st.write("---")
-        st.subheader("СТРАТЕГИЙН НӨЛӨӨЛӨЛ (Радар график)")
-        radar_df = pd.DataFrame(selected_stock["radar"])
-        fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
-        fig_radar.update_traces(fill='toself')
-        st.plotly_chart(fig_radar, use_container_width=True)
+        with tab1:
+            st.markdown(f"**Арилжааны Дохио:** :{selected_stock['signal_color']}[{selected_stock['Сигнал']}]")
+            st.metric(
+                label="Шинжээчдийн дундаж бай (Target)", 
+                value=f"${selected_stock['Шинжээчдийн Таамаг']}" if selected_stock['Шинжээчдийн Таамаг'] > 0 else "N/A", 
+                delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай"
+            )
+            st.info(f"""
+            * **Салбар:** {selected_stock['Салбар']}
+            * **Одоогийн RSI:** {selected_stock['RSI']}
+            * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} 
+            * **Хамгийн бага таамаг:** ${selected_stock['low_target']}
+            """)
+            
+        with tab2:
+            hist_df = selected_stock["history_df"].reset_index()
+            fig_line = px.line(hist_df, x='Date', y='Close', title=f"{selected_ticker} Сүүлийн 3 сар")
+            fig_line.update_layout(xaxis_title="Огноо", yaxis_title="Үнэ ($)", margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_line, use_container_width=True)
+            
+        with tab3:
+            radar_df = pd.DataFrame(selected_stock["radar"])
+            fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
+            fig_radar.update_traces(fill='toself')
+            fig_radar.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_radar, use_container_width=True)
