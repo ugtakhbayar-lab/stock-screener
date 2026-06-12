@@ -68,15 +68,17 @@ def get_screened_data(strat, sector_sel):
             rev_growth = info.get('revenueGrowth', 0) or 0
             rsi = calculate_rsi(hist['Close']).iloc[-1]
             
-            if strat == "1. Төгс боломж (Хатуу шалгуур)" and 0 < pe < 30 and rsi < 50:
+            if strat == "1. Төгс боломж (Хатуу)" and 0 < pe < 30 and rsi < 50:
                 screened.append(process_stock_data(t, info, hist))
-            elif strat == "2. Ирээдүйн өсөлт (Turnaround)" and forward_pe > 0 and forward_pe < 25 and rev_growth > 0.15:
+            elif strat == "2. Тренд дагах (Уян хатан)" and rsi < 75:
+                screened.append(process_stock_data(t, info, hist))
+            elif strat == "3. Ирээдүйн өсөлт (Turnaround)" and forward_pe > 0 and forward_pe < 25 and rev_growth > 0.15:
                 screened.append(process_stock_data(t, info, hist))
         except: continue
     return screened
 
 st.sidebar.title("⚙️ Удирдах Цэс")
-strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу шалгуур)", "2. Ирээдүйн өсөлт (Turnaround)"))
+strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу)", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
 
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
@@ -96,7 +98,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
-            # АЛДАА ЗАСАВ: ЗАЙГҮЙ БИЧИВ (':')
+            # ЗАЙГҮЙ БИЧИХ (':')
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['Өсөх Боломж']}**")
         with tab2:
