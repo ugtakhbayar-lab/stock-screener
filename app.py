@@ -12,26 +12,19 @@ st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Хөрөнгө оруулалтын стратеги:", ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)"))
 sector_choice = st.sidebar.selectbox("Салбараар шүүх:", ("Бүх салбар", "Technology", "Healthcare", "Financial Services", "Consumer Cyclical", "Industrials", "Energy"))
 st.sidebar.write("---")
+# Шүүх товч нэмсэн
+if st.sidebar.button("🚀 Хувьцааг Шүүх"):
+    st.session_state.run_screen = True
+else:
+    if 'run_screen' not in st.session_state: st.session_state.run_screen = False
+
 search_ticker = st.sidebar.text_input("🔍 Шууд хувьцаа хайх (Жишээ нь: OSCR, AAPL):").upper().strip()
 
 st.title("📈 Хос Стратегит & Автомат Зөвлөхтэй Хувьцаа Шүүгч")
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    tickers = []
-    try:
-        url_500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        tickers_500 = pd.read_html(url_500)[0]['Symbol'].str.replace('.', '-', regex=False).tolist()
-        tickers.extend(tickers_500)
-        url_600 = 'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies'
-        tickers_600 = pd.read_html(url_600)[0]['Ticker symbol'].str.replace('.', '-', regex=False).tolist()
-        tickers.extend(tickers_600)
-        url_2000 = 'https://en.wikipedia.org/wiki/List_of_Russell_2000_companies'
-        tickers_2000 = pd.read_html(url_2000)[0]['Ticker'].str.replace('.', '-', regex=False).tolist()
-        tickers.extend(tickers_2000)
-        return list(set(tickers))
-    except:
-        return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM', 'OSCR']
+    return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM', 'OSCR', 'TSLA', 'NVDA']
 
 TICKERS = get_all_us_tickers()
 
@@ -53,44 +46,31 @@ def process_stock_data(ticker, info, history):
     potential_growth = round(((target_price - current_price) / current_price) * 100, 1) if target_price and current_price else "N/A"
     
     if current_rsi < 35:
-        signal = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ (Хэт унасан)"
+        signal = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ"
         signal_color = "green"
     elif current_rsi < 55:
-        signal = "✅ ХУДАТДАЖ АВАХ (Боломжит бүс)"
+        signal = "✅ ХУДАТДАЖ АВАХ"
         signal_color = "lightgreen"
-    elif current_rsi > 70:
-        signal = "⚠️ ЗАРАХ / ТҮР ХҮЛЭЭХ (Хэт хөөссөн)"
-        signal_color = "red"
     else:
-        signal = "🔲 СУУЖ БАЙХ (Төвийг сахисан)"
+        signal = "🔲 СУУЖ БАЙХ"
         signal_color = "orange"
         
     return {
         "Тикер": ticker, "Компани": info.get('longName', ticker), "Салбар": sector,
         "Өнөөгийн Үнэ": current_price, "Шинжээчдийн Таамаг": target_price or 0,
-        "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
-        "RSI": round(current_rsi, 1), "Сигнал": signal, "signal_color": signal_color,
-        "potential_raw": potential_growth if potential_growth != "N/A" else -999,
-        "high_target": info.get('targetHighPrice', current_price),
-        "low_target": info.get('targetLowPrice', current_price),
+        "Өсөх Боломж (%)": f"{potential_growth}%", "RSI": round(current_rsi, 1),
+        "Сигнал": signal, "signal_color": signal_color, "potential_raw": potential_growth if potential_growth != "N/A" else -999,
         "history_df": history, "radar": [{"Үзүүлэлт": "RSI", "Оноо": current_rsi}]
     }
 
 def get_screened_data(strat_selection, sector_sel):
     screened = []
-    for ticker in TICKERS:
+    for ticker in TICKERS[:20]: # Түргэн ажиллахын тулд цөөн тикер сонгов
         try:
             stock = yf.Ticker(ticker)
-            info = stock.info
-            pb = info.get('priceToBook')
-            current_price = info.get('currentPrice')
-            sector = info.get('sector', 'Unknown')
-            if sector_sel != "Бүх салбар" and sector != sector_sel: continue
-            if pb and pb < 5 and current_price:
-                history = stock.history(period="1y")
-                if len(history) >= 30:
-                    stock_data = process_stock_data(ticker, info, history)
-                    screened.append(stock_data)
+            history = stock.history(period="1y")
+            if len(history) >= 30:
+                screened.append(process_stock_data(ticker, stock.info, history))
         except: continue
     return screened
 
@@ -98,30 +78,25 @@ def get_screened_data(strat_selection, sector_sel):
 if search_ticker:
     s_stock = yf.Ticker(search_ticker)
     show_data = [process_stock_data(search_ticker, s_stock.info, s_stock.history(period="1y"))]
-    selected_ticker = search_ticker
-else:
+elif st.session_state.run_screen:
     show_data = get_screened_data(strategy, sector_choice)
-    selected_ticker = show_data[0]['Тикер'] if show_data else None
+else:
+    show_data = []
 
 # Дэлгэц
-if not show_data:
-    st.warning("Сонгосон шалгуурт тэнцэх хувьцаа олдсонгүй.")
-else:
+if show_data:
     df = pd.DataFrame(show_data).sort_values(by="potential_raw", ascending=False)
     col1, col2 = st.columns([1.0, 1.0])
     with col1:
-        st.subheader(f"🔍 Жагсаалт ({len(df)} компани)")
-        if not selected_ticker:
-            selected_ticker = st.selectbox("Сонгоно уу:", df["Тикер"].tolist())
+        st.subheader("🔍 Жагсаалт")
+        selected_ticker = st.selectbox("Хувьцаа сонгох:", df["Тикер"].tolist())
         st.dataframe(df[["Тикер", "Сигнал", "RSI"]], use_container_width=True)
     with col2:
-        if selected_ticker:
-            selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
-            st.subheader(f"📊 {selected_ticker} Хянах Самбар")
-            tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
-            with tab1:
-                st.info(f"Салбар: {selected_stock['Салбар']} | RSI: {selected_stock['RSI']}")
-            with tab2:
-                st.plotly_chart(px.line(selected_stock['history_df'], y='Close'), use_container_width=True)
-            with tab3:
-                st.plotly_chart(px.line_polar(pd.DataFrame(selected_stock['radar']), r='Оноо', theta='Үзүүлэлт'), use_container_width=True)
+        selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
+        st.subheader(f"📊 {selected_ticker} Хянах Самбар")
+        tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
+        with tab1: st.info(f"Салбар: {selected_stock['Салбар']}")
+        with tab2: st.plotly_chart(px.line(selected_stock['history_df'], y='Close'), use_container_width=True)
+        with tab3: st.plotly_chart(px.line_polar(pd.DataFrame(selected_stock['radar']), r='Оноо', theta='Үзүүлэлт'), use_container_width=True)
+else:
+    st.info("Хувьцааг шүүх товчийг дарна уу.")
