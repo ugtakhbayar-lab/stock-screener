@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
-import datetime
 
 # 1. Хуудасны тохиргоо
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
@@ -74,6 +73,7 @@ if st.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
         bar.progress((i + 1) / len(tickers))
     st.session_state.results = results
     st.success(f"✅ Шинжилгээ дууслаа! Олдсон: {len(results)}")
+    st.rerun()
 
 # Үр дүн харуулах
 if 'results' in st.session_state and len(st.session_state.results) > 0:
@@ -82,11 +82,6 @@ if 'results' in st.session_state and len(st.session_state.results) > 0:
 
     selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
 
-    # CSV татах
-    csv = df.drop(columns=['radar_df'], errors='ignore').to_csv(index=False).encode('utf-8')
-    st.download_button("💾 CSV татах", csv, "results.csv")
-
-    # Сонгосон хувьцааны дэлгэрэнгүй
     if selected.selection.rows:
         idx = selected.selection.rows[0]
         if idx < len(st.session_state.results):
