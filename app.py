@@ -5,15 +5,26 @@ import plotly.express as px
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
 
-# ХАЖУУГИЙН ЦЭСЭНД СТРАТЕГИ СОНГОХ ХЭСЭГ ХИЙХ
-st.sidebar.title("⚙️ Шүүлтүүрийн Тохиргоо")
+# 1. ХАЖУУГИЙН ЦЭС (SIDEBAR) - ТОХИРГООНУУД
+st.sidebar.title("⚙️ Ухаалаг Удирдах Цэс")
+
+# Стратеги сонгох
 strategy = st.sidebar.radio(
-    "Хөрөнгө оруулалтын стратеги сонгох:",
+    "Хөрөнгө оруулалтын стратеги:",
     ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)")
 )
 
-st.title("📈 Хос Стратегит Ухаалаг Хувьцаа Шүүгч")
-st.write(f"Яг одоо сонгосон стратеги: **{strategy}**")
+# Салбар сонгох шүүлтүүр
+sector_choice = st.sidebar.selectbox(
+    "Салбараар шүүх:",
+    ("Бүх салбар", "Technology", "Healthcare", "Financial Services", "Consumer Cyclical", "Industrials", "Energy")
+)
+
+st.sidebar.write("---")
+# Шууд тикерээр хайх талбар
+search_ticker = st.sidebar.text_input("🔍 Шууд хувьцаа хайх (Жишээ нь: OSCR, AAPL):").upper().strip()
+
+st.title("📈 Хос Стратегит & Автомат Зөвлөхтэй Хувьцаа Шүүгч")
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
@@ -44,8 +55,66 @@ def calculate_rsi(series, periods=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
+# ХУВЬЦААНЫ МЭДЭЭЛЛИЙГ БОДДОГ СУУРЬ ФУНКЦ
+def process_stock_data(ticker, info, history):
+    pe = info.get('trailingPE')
+    pb = info.get('priceToBook')
+    current_price = info.get('currentPrice')
+    sector = info.get('sector', 'Unknown')
+    
+    close_prices = history['Close'].dropna()
+    rsi_series = calculate_rsi(close_prices)
+    current_rsi = rsi_series.iloc[-1]
+    
+    target_price = info.get('targetMeanPrice')
+    potential_growth = round(((target_price - current_price) / current_price) * 100, 1) if target_price and current_price else "N/A"
+    
+    # СИГНАЛ ТОХИРУУЛАХ ЛОГИК
+    if current_rsi < 35:
+        signal = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ (Хэт унасан)"
+        signal_color = "green"
+    elif current_rsi < 55:
+        signal = "✅ ХУДАТДАЖ АВАХ (Боломжит бүс)"
+        signal_color = "lightgreen"
+    elif current_rsi > 70:
+        signal = "⚠️ ЗАРАХ / ТҮР ХҮЛЭЭХ (Хэт хөөссөн)"
+        signal_color = "red"
+    else:
+        signal = "🔲 СУУЖ БАЙХ (Төвийг сахисан)"
+        signal_color = "orange"
+        
+    current_pe = pe if pe else 40
+    val_score = max(10, min(100, int((60 - current_pe) * 2)))
+    mom_score = max(10, min(100, int((75 - current_rsi) * 1.5))) 
+    growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
+    health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
+    
+    return {
+        "Тикер": ticker,
+        "Компани": info.get('longName', ticker),
+        "Салбар": sector,
+        "Өнөөгийн Үнэ": f"${current_price}",
+        "Шинжээчдийн Таамаг": f"${target_price}" if target_price else "N/A",
+        "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
+        "P/E": round(pe, 2) if pe else "N/A",
+        "P/B": round(pb, 2) if pb else "N/A",
+        "RSI": round(current_rsi, 1),
+        "Сигнал": signal,
+        "signal_color": signal_color,
+        "potential_raw": potential_growth if potential_growth != "N/A" else -999,
+        "high_target": info.get('targetHighPrice', current_price),
+        "low_target": info.get('targetLowPrice', current_price),
+        "close_prices": close_prices,
+        "radar": [
+            {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
+            {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
+            {"Үзүүлэлт": "Орлого", "Оноо": growth},
+            {"Үзүүлэлт": "Эрүүл мэнд", "Оноо": health}
+        ]
+    }
+
 @st.cache_data(ttl=3600)
-def get_screened_data(strat_selection):
+def get_screened_data(strat_selection, sector_sel):
     screened = []
     progress_bar = st.progress(0)
     total = len(TICKERS)
@@ -55,11 +124,14 @@ def get_screened_data(strat_selection):
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
-            pe = info.get('trailingPE')
             pb = info.get('priceToBook')
             current_price = info.get('currentPrice')
+            sector = info.get('sector', 'Unknown')
             
-            # Суурь шалгуур: P/B < 5
+            # Салбарын шүүлтүүр шалгах
+            if sector_sel != "Бүх салбар" and sector != sector_sel:
+                continue
+                
             if pb and pb < 5 and current_price:
                 history = stock.history(period="3mo")
                 if len(history) >= 30:
@@ -67,85 +139,82 @@ def get_screened_data(strat_selection):
                     rsi_series = calculate_rsi(close_prices)
                     current_rsi = rsi_series.iloc[-1]
                     
-                    # ШАЛГАРУУЛАЛТЫН ЛОГИК
                     is_match = False
-                    
                     if strat_selection == "1. Төгс боломж (Хатуу шалгуур)":
-                        # RSI < 55 БОЛОН сүүлийн 3 арилжааны өдөр дараалан өссөн байх
                         if pd.notna(current_rsi) and current_rsi < 55:
                             trading_days_3 = close_prices.tail(3).tolist()
                             if len(trading_days_3) == 3 and trading_days_3[2] > trading_days_3[1] and trading_days_3[1] > trading_days_3[0]:
                                 is_match = True
-                                mom_score = max(10, min(100, int((70 - current_rsi) * 2)))
-                                
-                    else: # 2. Уян хатан шалгуур
-                        # RSI нь эрүүл бүст (30-65) БОЛОН SMA 5 > SMA 20 (Ерөнхий өсөлт эхэлсэн)
+                    else:
                         if pd.notna(current_rsi) and 30 <= current_rsi <= 65:
                             sma_5 = close_prices.tail(5).mean()
                             sma_20 = close_prices.tail(20).mean()
                             if sma_5 > sma_20:
                                 is_match = True
-                                mom_score = max(10, min(100, int((75 - current_rsi) * 1.5)))
 
                     if is_match:
-                        target_price = info.get('targetMeanPrice')
-                        potential_growth = "N/A"
-                        if target_price:
-                            potential_growth = round(((target_price - current_price) / current_price) * 100, 1)
-                        
-                        current_pe = pe if pe else 40
-                        val_score = max(10, min(100, int((60 - current_pe) * 2)))
-                        growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
-                        health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
-                        
-                        screened.append({
-                            "Тикер": ticker,
-                            "Компани": info.get('longName', ticker),
-                            "Өнөөгийн Үнэ": f"${current_price}",
-                            "Шинжээчдийн Таамаг": f"${target_price}" if target_price else "N/A",
-                            "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
-                            "P/E": round(pe, 2) if pe else "N/A",
-                            "RSI": round(current_rsi, 1),
-                            "potential_raw": potential_growth if potential_growth != "N/A" else -999,
-                            "high_target": info.get('targetHighPrice', current_price),
-                            "low_target": info.get('targetLowPrice', current_price),
-                            "radar": [
-                                {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
-                                {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
-                                {"Үзүүлэлт": "Орлого", "Оноо": growth},
-                                {"Үзүүлэлт": "Эрүүл мэнд", "Оноо": health}
-                            ]
-                        })
+                        stock_data = process_stock_data(ticker, info, history)
+                        screened.append(stock_data)
         except:
             continue
             
     progress_bar.empty()
     return screened
 
-# Сонгосон стратегиар датаг шүүх
-data = get_screened_data(strategy)
+# ХАЙЛТЫН ТАЛБАР АЖИЛЛАХ ЭСЭХИЙГ ШАЛГАХ
+single_stock_view = None
+if search_ticker:
+    try:
+        s_stock = yf.Ticker(search_ticker)
+        s_info = s_stock.info
+        s_history = s_stock.history(period="3mo")
+        if 'Close' in s_history.columns and len(s_history) >= 30:
+            single_stock_view = process_stock_data(search_ticker, s_info, s_history)
+            st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' амжилттай олдлоо! Шүүлтүүр харгалзахгүй харуулж байна.")
+    except:
+        st.error(f"❌ '{search_ticker}' тикер олдсонгүй. Зөв бичсэн эсэхээ шалгана уу.")
 
-if not data:
-    st.warning("Яг одоо энэ сонгосон шалгуурт тэнцэх хувьцаа олдсонгүй.")
+# ҮНДСЭН ХЭСЭГТ ДАТАГ ХАРУУЛАХ
+if single_stock_view:
+    # Хэрэв хэрэглэгч шууд хайлт хийсэн бол зөвхөн тэр хувьцааг харуулна
+    show_data = [single_stock_view]
+    selected_ticker = search_ticker
 else:
-    df = pd.DataFrame(data)
+    show_data = get_screened_data(strategy, sector_choice)
+    selected_ticker = None
+
+if not show_data:
+    st.warning(f"Яг одоо сонгосон стратеги болон салбарт ({sector_choice}) тэнцэх хувьцаа олдсонгүй.")
+else:
+    df = pd.DataFrame(show_data)
     df = df.sort_values(by="potential_raw", ascending=False)
     
     col1, col2 = st.columns([1.2, 0.8])
     
     with col1:
-        st.subheader(f"🔍 Олдсон хувьцаанууд ({len(df)} компани)")
-        selected_ticker = st.selectbox("Шинжлэх хувьцааг сонгоно уу:", df["Тикер"].tolist())
-        st.dataframe(df[["Тикер", "Компани", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "P/E"]], use_container_width=True)
+        st.subheader(f"🔍 Жагсаалт ({len(df)} компани)")
+        if not selected_ticker:
+            selected_ticker = st.selectbox("Шинжлэх хувьцааг сонгоно уу:", df["Тикер"].tolist())
+        st.dataframe(df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "Сигнал"]], use_container_width=True)
         
     with col2:
-        selected_stock = next(item for item in data if item["Тикер"] == selected_ticker)
-        st.subheader(f"📊 {selected_ticker} Үнийн Таамаглал")
-        st.metric(label="Шинжээчдийн дундаж бай (Target)", value=selected_stock["Шинжээчдийн Таамаг"], delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай")
+        selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
+        
+        st.subheader(f"📊 {selected_ticker} Автомат Зөвлөх")
+        
+        # Сигналыг өнгөтэй хайрцагт харуулах
+        st.markdown(f"**Арилжааны Дохио:** :{selected_stock['signal_color']}[{selected_stock['Сигнал']}]")
+        
+        st.metric(
+            label="Шинжээчдийн дундаж бай (Target)", 
+            value=selected_stock["Шинжээчдийн Таамаг"], 
+            delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай"
+        )
         
         st.info(f"""
-        * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']}
-        * **Хамгийн бага таамаг:** ${selected_stock['low_target']}
+        * **Салбар:** {selected_stock['Салбар']}
+        * **Одоогийн RSI:** {selected_stock['RSI']} (30-аас бага бол хямд, 70-аас их бол үнэтэй)
+        * **Хамгийн өндөр таамаг:** {selected_stock['high_target']} | **Доод таамаг:** {selected_stock['low_target']}
         """)
         
         st.write("---")
