@@ -30,7 +30,6 @@ def get_all_us_tickers():
 def get_stock_data(ticker, strategy):
     s = yf.Ticker(ticker)
     try:
-        # info-г татаж аваад, хоосон утгаас хамгаалах
         info = s.info
         if not info: return None
         
@@ -43,9 +42,9 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice') or 0
         current = info.get('currentPrice') or 1
         
-        if strategy == "1. Төгс боломж" and not (0 < pe < 20 and growth > 0.1): return None
-        if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.1: return None
-        if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 25 and growth > 0.2): return None
+        if strategy == "1. Төгс боломж" and not (0 < pe < 25 and growth > 0.05): return None
+        if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.05: return None
+        if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 30 and growth > 0.1): return None
         
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": round(((target - current) / current) * 100, 1), "signal_color": "green"}
@@ -78,9 +77,8 @@ if 'data' in st.session_state and st.session_state.data:
         st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
-            # ЭНД ЗАЙГ БҮР МӨСӨН УСТГАВ:
-            st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
-            st.success(f"📈 Өсөх боломж: **{stock['growth_pot']}%**")
+            st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
+            st.success(f"📈Өсөх боломж:*{stock['growth_pot']}%**")
         with tab2:
             st.plotly_chart(px.line_polar(stock['radar'], r='Оноо', theta='Үзүүлэлт', line_close=True), use_container_width=True)
         with tab3:
