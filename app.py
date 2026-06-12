@@ -1,4 +1,4 @@
-import streamlit as st
+     import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
@@ -9,7 +9,6 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", la
 if 'watchlist' not in st.session_state: st.session_state.watchlist = set()
 if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker = None
 
-# Кэшийг маш бага хугацаатай болгож, өгөгдлийг байнга шинээр татна
 @st.cache_data(ttl=1)
 def get_all_us_tickers():
     tickers = set()
@@ -63,7 +62,6 @@ if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     data = []
     total = len(all_tickers)
     progress_bar = st.progress(0)
-    # Бодит цагийн өгөгдөл татах loop
     for i, t in enumerate(all_tickers):
         res = get_stock_data(t, strategy)
         if res: data.append(res)
@@ -86,7 +84,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГҮЙ БИЧЛЭЭ
+            # ЯГ ЭНД ЗАЙГҮЙ БИЧЛЭЭ: : гэсний дараа шууд {stock...
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
