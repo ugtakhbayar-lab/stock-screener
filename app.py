@@ -20,15 +20,20 @@ def calculate_rsi(series, periods=14):
 def process_stock_data(ticker, info, history):
     close = history['Close'].dropna()
     rsi = calculate_rsi(close).iloc[-1] if len(close) > 14 else 50
-    
+    pe = info.get('trailingPE', 20)
     if rsi < 35: signal, color = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ", "green"
     elif rsi < 55: signal, color = "✅ ХУДАТДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
-        
+    
+    radar_df = pd.DataFrame({
+        "Үзүүлэлт": ["RSI", "P/E Үнэлгээ", "Хүч чадал"], 
+        "Оноо": [rsi, min(pe, 100), 70]
+    })
     return {
-        "Тикер": ticker, "Компани": info.get('longName', ticker), "Салбар": info.get('sector', 'Unknown'),
-        "RSI": round(rsi, 1), "Сигнал": signal, "signal_color": color,
-        "history_df": history, "radar": [{"Үзүүлэлт": "RSI", "Оноо": rsi}]
+        "Тикер": ticker, "Компани": info.get('longName', ticker), 
+        "Салбар": info.get('sector', 'Unknown'), "RSI": round(rsi, 1), 
+        "Сигнал": signal, "signal_color": color, 
+        "history_df": history, "radar": radar_df
     }
 
 def get_screened_data(strat, sector_sel):
@@ -39,20 +44,18 @@ def get_screened_data(strat, sector_sel):
             hist = s.history(period="1y")
             if len(hist) < 30: continue
             data = process_stock_data(t, s.info, hist)
-            # Шүүлтүүрийн логик
             if strat == "1. Төгс боломж (Хатуу шалгуур)" and data['RSI'] < 40: screened.append(data)
             elif strat == "2. Тренд дагах (Уян хатан шалгуур)" and data['RSI'] < 65: screened.append(data)
         except: continue
     return screened
 
-# Sidebar
 st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)"))
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
+
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
     st.session_state.data = get_screened_data(strategy, sector)
 
-# Main Display
 if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
     col1, col2 = st.columns([1, 1])
@@ -70,6 +73,6 @@ if 'data' in st.session_state and st.session_state.data:
         with tab2:
             st.plotly_chart(px.line(stock['history_df'], y='Close'), use_container_width=True)
         with tab3:
-            st.plotly_chart(px.line_polar(pd.DataFrame(stock['radar']), r='Оноо', theta='Үзүүлэлт', line_close=True), use_container_width=True)
+            st.plotly_chart(px.line_polar(stock['radar'], r='Оноо', theta='Үзүүлэлт', line_close=True), use_container_width=True)
 else:
     st.info("Стратегиа сонгоод 'Хувьцааг Шүүх' товчийг дарна уу.")
