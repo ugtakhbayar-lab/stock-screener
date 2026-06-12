@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests # НЭМЭХ
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
 
@@ -12,20 +13,26 @@ if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker =
 @st.cache_data(ttl=3600)
 def get_all_us_tickers():
     tickers = set()
-    try:
-        urls = [
-            'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies',
-            'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies',
-            'https://en.wikipedia.org/wiki/Nasdaq-100',
-            'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
-        ]
-        for url in urls:
-            # Алдаагүй болохын тулд flavor='bs4' нэмсэн
-            df = pd.read_html(url, flavor='bs4')[0]
-            col = 'Symbol' if 'Symbol' in df.columns else 'Ticker'
-            tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
-    except Exception as e:
-        st.error(f"Дата татахад алдаа гарлаа: {e}")
+    # Хөтөч гэж таниулах header
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    
+    urls = [
+        'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies',
+        'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies',
+        'https://en.wikipedia.org/wiki/Nasdaq-100',
+        'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
+    ]
+    
+    for url in urls:
+        try:
+            # requests ашиглан татах
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                df = pd.read_html(response.text, flavor='bs4')[0]
+                col = 'Symbol' if 'Symbol' in df.columns else 'Ticker'
+                tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
+        except Exception as e:
+            st.error(f"Дата татахад алдаа гарлаа: {e}")
     return list(tickers)
 
 def get_stock_data(ticker, strategy):
@@ -40,7 +47,6 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice', 0)
         current = info.get('currentPrice', 1)
         growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
-        
         if strategy == "1. Төгс боломж" and not (0 < pe < 30): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and 50 > 75: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 40 and growth > 0.1): return None
@@ -77,7 +83,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГ АРИЛГАСАН: :{stock
+            # ЭНД ЗАЙГ БҮР МӨСӨН УСТГАВ
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
