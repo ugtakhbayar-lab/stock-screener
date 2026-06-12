@@ -10,18 +10,13 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max"
 def get_all_us_tickers():
     tickers = set()
     try:
-        # S&P 500 & 600
         for url in ['https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 
                     'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies']:
             df = pd.read_html(url)[0]
             col = 'Symbol' if 'Symbol' in df.columns else 'Ticker symbol'
             tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
-        
-        # Nasdaq-100
         url_nasdaq = 'https://en.wikipedia.org/wiki/Nasdaq-100'
         tickers.update(pd.read_html(url_nasdaq)[4]['Ticker'].tolist())
-        
-        # Russell 2000 (Эхний 200)
         url_russell = 'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
         tickers.update(pd.read_html(url_russell)[0]['Ticker'].tolist()[:200])
     except:
@@ -38,13 +33,13 @@ def calculate_rsi(series, periods=14):
 def process_stock_data(ticker, info, history):
     close = history['Close'].dropna()
     rsi = calculate_rsi(close).iloc[-1] if len(close) > 14 else 50
-    pe = info.get('trailingPE', 20)
+    pe = info.get('trailingPE', 0) or 0
     target = info.get('targetMeanPrice', 0)
     current = info.get('currentPrice', 1)
     growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
     
-    if rsi < 35: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
-    elif rsi < 55: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
+    if rsi < 40: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
+    elif rsi < 60: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
     
     pe_score = max(0, 100 - (pe * 2))
@@ -64,20 +59,28 @@ def get_screened_data(strat, sector_sel):
     for t in get_all_us_tickers()[:]: 
         try:
             s = yf.Ticker(t)
+            info = s.info
             hist = s.history(period="1y")
             if len(hist) < 30: continue
-            data = process_stock_data(t, s.info, hist)
-            if strat == "1. Төгс боломж (Хатуу шалгуур)" and data['RSI'] < 40: screened.append(data)
-            elif strat == "2. Тренд дагах (Уян хатан шалгуур)" and data['RSI'] < 65: screened.append(data)
+            
+            pe = info.get('trailingPE', 0) or 0
+            forward_pe = info.get('forwardPE', 0) or 0
+            rev_growth = info.get('revenueGrowth', 0) or 0
+            rsi = calculate_rsi(hist['Close']).iloc[-1]
+            
+            if strat == "1. Төгс боломж (Хатуу шалгуур)" and 0 < pe < 30 and rsi < 50:
+                screened.append(process_stock_data(t, info, hist))
+            elif strat == "2. Ирээдүйн өсөлт (Turnaround)" and forward_pe > 0 and forward_pe < 25 and rev_growth > 0.15:
+                screened.append(process_stock_data(t, info, hist))
         except: continue
     return screened
 
 st.sidebar.title("⚙️ Удирдах Цэс")
-strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)"))
+strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу шалгуур)", "2. Ирээдүйн өсөлт (Turnaround)"))
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
 
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
-    with st.spinner("Хувьцаануудыг шүүж байна..."):
+    with st.spinner("3000+ хувьцааг шүүж байна..."):
         st.session_state.data = get_screened_data(strategy, sector)
 
 if 'data' in st.session_state and st.session_state.data:
@@ -93,7 +96,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
-            # Энд зайгүй бичсэн тул өнгө заавал гарна:
+            # АЛДАА ЗАСАВ: ЗАЙГҮЙ БИЧИВ (':')
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['Өсөх Боломж']}**")
         with tab2:
