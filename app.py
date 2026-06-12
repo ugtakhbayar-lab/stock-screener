@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+import datetime
 
 # 1. Хуудасны тохиргоо
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
@@ -40,7 +41,6 @@ def get_stock_data(ticker, strategy):
         
         # --- ХАТУУ ШҮҮЛТҮҮР + RSI ---
         passed = False
-        # Зөвхөн RSI < 40 (хямдарсан) хувьцаануудыг л харна
         if rsi < 40:
             if strategy == "1. Төгс боломж" and (0 < pe < 20) and (growth > 0.10): passed = True
             elif strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) >= 0.20: passed = True
@@ -77,10 +77,18 @@ if st.button("🚀 ШҮҮЛТҮҮРИЙГ АЖИЛЛУУЛАХ"):
     st.session_state.results = results
     st.success(f"✅ Нийт {len(results)} хувьцаа шалгуурт тэнцлээ.")
 
-# Үр дүн
+# Үр дүн ба хадгалах хэсэг
 if 'results' in st.session_state and st.session_state.results:
     df_results = pd.DataFrame(st.session_state.results)
-    selected = st.dataframe(df_results[["Тикер", "Компани", "rsi", "price"]], use_container_width=True, on_select="rerun", selection_mode="single-row")
+    df_results['Шинжилгээ хийсэн цаг'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    selected = st.dataframe(df_results[["Тикер", "Компани", "rsi", "price", "Шинжилгээ хийсэн цаг"]], 
+                            use_container_width=True, on_select="rerun", selection_mode="single-row")
+    
+    # CSV Татах товч
+    csv = df_results.to_csv(index=False).encode('utf-8')
+    st.download_button("💾 Энэ шинжилгээг CSV-ээр татах", csv, 
+                       f"results_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.csv", "text/csv")
     
     if selected.selection["rows"]:
         idx = selected.selection["rows"][0]
