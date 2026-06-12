@@ -42,9 +42,9 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice') or 0
         current = info.get('currentPrice') or 1
         
-        if strategy == "1. Төгс боломж" and not (0 < pe < 50 and growth > 0): return None
-        if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.01: return None
-        if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 50 or growth > 0): return None
+        if strategy == "1. Төгс боломж" and not (0 < pe < 25 and growth > 0.05): return None
+        if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.10: return None
+        if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 30 and growth > 0.1): return None
         
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": round(((target - current) / current) * 100, 1), "signal_color": "green"}
