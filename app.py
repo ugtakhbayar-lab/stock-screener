@@ -10,25 +10,16 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", la
 if 'watchlist' not in st.session_state: st.session_state.watchlist = set()
 if 'selected_ticker' not in st.session_state: st.session_state.selected_ticker = None
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    tickers = set()
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    urls = [
-        'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies',
-        'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies',
-        'https://en.wikipedia.org/wiki/Nasdaq-100',
-        'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
-    ]
-    for url in urls:
-        try:
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                df = pd.read_html(response.text, flavor='bs4')[0]
-                col = 'Symbol' if 'Symbol' in df.columns else 'Ticker'
-                tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
-        except: pass
-    return list(tickers)
+    # Википедиагийн оронд S&P 500-ийн найдвартай CSV холбоос ашиглах
+    url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
+    try:
+        df = pd.read_csv(url)
+        tickers = df['Symbol'].tolist()
+        return [t.replace('.', '-') for t in tickers]
+    except:
+        return ['AAPL', 'MSFT', 'NVDA', 'AMD', 'TSLA', 'GOOGL', 'AMZN', 'META', 'NFLX', 'PLTR', 'SOFI']
 
 def get_stock_data(ticker, strategy):
     s = yf.Ticker(ticker)
@@ -78,7 +69,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-            # ЯГ ЭНД ЗАЙГ АРИЛГАВ: :{stock['signal_color']}
+            # Энд ямар ч зай байхгүй - энэ нь өнгийг зөв харуулах болно
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
