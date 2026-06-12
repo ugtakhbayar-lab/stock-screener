@@ -33,7 +33,6 @@ def get_stock_data(ticker, strategy):
         s = yf.Ticker(ticker)
         info = s.info
         if not info: return None
-
         pe = info.get('trailingPE') or 0
         fpe = info.get('forwardPE') or 0
         growth = info.get('revenueGrowth') or 0
@@ -42,7 +41,7 @@ def get_stock_data(ticker, strategy):
         rsi = get_rsi(ticker)
         
         passed = False
-        # ХАТУУ ШАЛГУУРУУД (RSI < 40, P/E < 20 гэх мэт)
+        # Хатуу шалгуурууд
         if rsi < 40: 
             if strategy == "1. Төгс боломж" and (0 < pe < 20) and (growth > 0.10): passed = True
             elif strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) >= 0.20: passed = True
@@ -56,55 +55,50 @@ def get_stock_data(ticker, strategy):
         })
 
         return {
-            "Тикер": ticker,
-            "Компани": info.get('longName', ticker),
-            "rsi": round(rsi, 1),
-            "price": current,
-            "growth_pot": round(((target - current) / current) * 100, 1),
-            "radar_df": radar_df,
-            "signal_color": "green" if target > current else "orange"
+            "Тикер": ticker, "Компани": info.get('longName', ticker), "rsi": round(rsi, 1),
+            "price": current, "growth_pot": round(((target - current) / current) * 100, 1),
+            "radar_df": radar_df, "signal_color": "green" if target > current else "orange"
         }
     except: return None
 
-# Sidebar
+# UI хэсэг
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 
 if st.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
     tickers = get_all_us_tickers()
-    st.info("🔍 Шинжилж байна...")
+    st.write(f"📊 Нийт {len(tickers)} хувьцааг шинжилж эхэллээ...")
     results = []
     bar = st.progress(0)
+    
     for i, t in enumerate(tickers):
         data = get_stock_data(t, strategy)
         if data: results.append(data)
         bar.progress((i + 1) / len(tickers))
+        
     st.session_state.results = results
+    st.success(f"✅ Шинжилгээ дууслаа! Шалгуурт тэнцсэн хувьцаа: {len(results)}")
 
-# Үр дүн - ХАМГААЛАЛТТАЙ ХЭСЭГ
-if 'results' in st.session_state and st.session_state.results:
-    df = pd.DataFrame(st.session_state.results)
-    display_df = df[["Тикер", "Компани", "rsi", "price", "growth_pot"]].copy()
-    
-    selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
-    
-    # Аюулгүй CSV татах (KeyError-оос сэргийлсэн)
-    st.subheader("💾 Үр дүн татах")
-    csv_df = df.copy()
-    if 'radar_df' in csv_df.columns: 
-        csv_df = csv_df.drop(columns=['radar_df'])
-    csv = csv_df.to_csv(index=False).encode('utf-8')
-    st.download_button("CSV-ээр татах", csv, "results.csv")
-    
-    # Сонголтыг шалгах аюулгүй арга (Индекс алдаа гаргахгүй)
-    if selected.selection and "rows" in selected.selection and selected.selection["rows"]:
-        idx = selected.selection["rows"][0]
-        if idx < len(st.session_state.results):
-            stock = st.session_state.results[idx]
-            st.divider()
-            st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
-            st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
-            st.metric("Одоогийн үнэ", f"${stock['price']}")
-            
-            if 'radar_df' in stock and not stock['radar_df'].empty:
-                fig = px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100])
-                st.plotly_chart(fig, use_container_width=True)
+# Үр дүн харуулах
+if 'results' in st.session_state:
+    if len(st.session_state.results) > 0:
+        df = pd.DataFrame(st.session_state.results)
+        display_df = df[["Тикер", "Компани", "rsi", "price", "growth_pot"]]
+        selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
+        
+        # CSV Татах
+        csv = df.drop(columns=['radar_df'], errors='ignore').to_csv(index=False).encode('utf-8')
+        st.download_button("💾 CSV татах", csv, "results.csv")
+        
+        # Сонгосон хувьцааг харуулах
+        if selected.selection and "rows" in selected.selection and selected.selection["rows"]:
+            idx = selected.selection["rows"][0]
+            if idx < len(st.session_state.results):
+                stock = st.session_state.results[idx]
+                st.divider()
+                st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
+                st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
+                st.metric("Үнэ", f"${stock['price']}")
+                if 'radar_df' in stock:
+                    st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
+    else:
+        st.warning("⚠️ Таны шалгуурт тэнцэх хувьцаа одоогоор алга байна (Шалгуур: RSI < 40).")
