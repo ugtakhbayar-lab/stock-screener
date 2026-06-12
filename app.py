@@ -18,7 +18,8 @@ def get_all_us_tickers():
 
 def get_rsi(ticker, period=14):
     try:
-        hist = yf.Ticker(ticker).history(period="1mo")
+        # Сүүлийн 3 сарын өдөр тутмын дата ашиглах
+        hist = yf.Ticker(ticker).history(period="3mo")
         if len(hist) < period: return 50
         delta = hist['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -41,7 +42,7 @@ def get_stock_data(ticker, strategy):
         rsi = get_rsi(ticker)
         
         passed = False
-        # Хатуу шалгуурууд
+        # Шалгуур (RSI < 40)
         if rsi < 40: 
             if strategy == "1. Төгс боломж" and (0 < pe < 20) and (growth > 0.10): passed = True
             elif strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) >= 0.20: passed = True
@@ -61,7 +62,7 @@ def get_stock_data(ticker, strategy):
         }
     except: return None
 
-# UI хэсэг
+# UI
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 
 if st.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
@@ -69,36 +70,37 @@ if st.button("🚀 ШИНЖИЛГЭЭГ АЖИЛЛУУЛАХ"):
     st.write(f"📊 Нийт {len(tickers)} хувьцааг шинжилж эхэллээ...")
     results = []
     bar = st.progress(0)
-    
     for i, t in enumerate(tickers):
         data = get_stock_data(t, strategy)
         if data: results.append(data)
         bar.progress((i + 1) / len(tickers))
-        
     st.session_state.results = results
-    st.success(f"✅ Шинжилгээ дууслаа! Шалгуурт тэнцсэн хувьцаа: {len(results)}")
+    st.success(f"✅ Шинжилгээ дууслаа! Олдсон: {len(results)}")
 
 # Үр дүн харуулах
-if 'results' in st.session_state:
-    if len(st.session_state.results) > 0:
-        df = pd.DataFrame(st.session_state.results)
-        display_df = df[["Тикер", "Компани", "rsi", "price", "growth_pot"]]
-        selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
-        
-        # CSV Татах
-        csv = df.drop(columns=['radar_df'], errors='ignore').to_csv(index=False).encode('utf-8')
-        st.download_button("💾 CSV татах", csv, "results.csv")
-        
-        # Сонгосон хувьцааг харуулах
-        if selected.selection and "rows" in selected.selection and selected.selection["rows"]:
-            idx = selected.selection["rows"][0]
-            if idx < len(st.session_state.results):
-                stock = st.session_state.results[idx]
-                st.divider()
-                st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
-                st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
-                st.metric("Үнэ", f"${stock['price']}")
-                if 'radar_df' in stock:
-                    st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
-    else:
-        st.warning("⚠️ Таны шалгуурт тэнцэх хувьцаа одоогоор алга байна (Шалгуур: RSI < 40).")
+if 'results' in st.session_state and len(st.session_state.results) > 0:
+    df = pd.DataFrame(st.session_state.results)
+    display_df = df[["Тикер", "Компани", "rsi", "price", "growth_pot"]]
+    
+    selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
+    
+    # CSV татах
+    csv = df.drop(columns=['radar_df'], errors='ignore').to_csv(index=False).encode('utf-8')
+    st.download_button("💾 CSV татах", csv, "results.csv")
+    
+    # Сонгосон хувьцааны дэлгэрэнгүй
+    if selected.selection.rows: 
+        idx = selected.selection.rows[0]
+        if idx < len(st.session_state.results):
+            stock = st.session_state.results[idx]
+            st.divider()
+            st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
+            st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
+            col1, col2 = st.columns(2)
+            col1.metric("Үнэ", f"${stock['price']}")
+            col2.metric("📈 Өсөх боломж", f"{stock['growth_pot']}%")
+            
+            if 'radar_df' in stock:
+                st.plotly_chart(px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100]), use_container_width=True)
+else:
+    st.warning("⚠️ Тэнцэх хувьцаа одоогоор алга.")
