@@ -41,9 +41,11 @@ def get_stock_data(ticker, strategy):
         target = info.get('targetMeanPrice', 0)
         current = info.get('currentPrice', 1)
         growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
+        
         if strategy == "1. Төгс боломж" and not (0 < pe < 30): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and 50 > 75: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 40 and growth > 0.1): return None
+        
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": growth_pot, "signal_color": "green"}
     except: return None
@@ -64,7 +66,7 @@ if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
 
 if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)[["Тикер", "Компани"]]
-    st.subheader("🔍 Хүснэгтээс сонгох")
+    st.subheader(f"🔍 Хүснэгтээс сонгох (Нийт: {len(df)} хувьцаа)")
     event = st.dataframe(df, use_container_width=True, on_select="rerun", selection_mode="single-row")
     if event.selection["rows"]:
         st.session_state.selected_ticker = df.iloc[event.selection["rows"][0]]["Тикер"]
@@ -74,6 +76,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "🕸️ Радар", "📉 График"])
         with tab1:
             st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
+            # ЭНД ЗАЙГ УСТГАЛАА
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['growth_pot']}%**")
         with tab2:
