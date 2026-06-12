@@ -4,24 +4,24 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# ДЭЛГЭЦИЙГ ӨРГӨНӨӨР НЬ ДҮҮРГЭЖ АЖИЛЛУУЛАХ
+# 🖥️ ДЭЛГЭЦИЙГ ӨРГӨНӨӨР НЬ БҮРЭН ДҮҮРГЭХ ТОХИРГОО
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max", layout="wide")
 
 # 1. ХАЖУУГИЙН ЦЭС (SIDEBAR) - ТОХИРГООНУУД
 st.sidebar.title("⚙️ Удирдах Цэс")
 
 strategy = st.sidebar.radio(
-    "Стратеги:",
+    "Хөрөнгө оруулалтын стратеги:",
     ("1. Төгс боломж (Хатуу шалгуур)", "2. Тренд дагах (Уян хатан шалгуур)")
 )
 
 sector_choice = st.sidebar.selectbox(
-    "Салбар:",
+    "Салбараар шүүх:",
     ("Бүх салбар", "Technology", "Healthcare", "Financial Services", "Consumer Cyclical", "Industrials", "Energy")
 )
 
 st.sidebar.write("---")
-search_ticker = st.sidebar.text_input("🔍 Шууд тикер хайх:").upper().strip()
+search_ticker = st.sidebar.text_input("🔍 Шууд хувьцаа хайх (Жишээ нь: OSCR, AAPL):").upper().strip()
 
 st.title("📈 Хос Стратегит & Автомат Зөвлөхтэй Хувьцаа Шүүгч")
 
@@ -54,6 +54,7 @@ def calculate_rsi(series, periods=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
+# ХУВЬЦААНЫ МЭДЭЭЛЛИЙГ БОДДОГ СУУРЬ ФУНКЦ
 def process_stock_data(ticker, info, history):
     pe = info.get('trailingPE')
     pb = info.get('priceToBook')
@@ -67,6 +68,7 @@ def process_stock_data(ticker, info, history):
     target_price = info.get('targetMeanPrice')
     potential_growth = round(((target_price - current_price) / current_price) * 100, 1) if target_price and current_price else "N/A"
     
+    # СИГНАЛ ТОХИРУУЛАХ ЛОГИК
     if current_rsi < 35:
         signal = "🚨 ХҮЧТЭЙ ХУДАТДАЖ АВАХ (Хэт унасан)"
         signal_color = "green"
@@ -129,7 +131,8 @@ def get_screened_data(strat_selection, sector_sel):
                 continue
                 
             if pb and pb < 5 and current_price:
-                history = stock.history(period="1y") # Өдөр тутам урт харахын тулд 1 жилээр татна
+                # 📅 ЗАСВАР: Ханшны графикийг урт хугацаагаар өдөр тутам харахын тулд 1 жилээр татна
+                history = stock.history(period="1y") 
                 if len(history) >= 30:
                     close_prices = history['Close'].dropna()
                     rsi_series = calculate_rsi(close_prices)
@@ -157,6 +160,7 @@ def get_screened_data(strat_selection, sector_sel):
     progress_bar.empty()
     return screened
 
+# Хайлтын систем
 single_stock_view = None
 if search_ticker:
     try:
@@ -165,7 +169,7 @@ if search_ticker:
         s_history = s_stock.history(period="1y") 
         if 'Close' in s_history.columns and len(s_history) >= 30:
             single_stock_view = process_stock_data(search_ticker, s_info, s_history)
-            st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' олдлоо!")
+            st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' амжилттай олдлоо!")
     except:
         st.error(f"❌ '{search_ticker}' тикер олдсонгүй.")
 
@@ -177,12 +181,12 @@ else:
     selected_ticker = None
 
 if not show_data:
-    st.warning(f"Сонгосон шалгуурт тэнцэх хувьцаа олдсонгүй.")
+    st.warning(f"Яг одоо сонгосон стратеги болон салбарт ({sector_choice}) тэнцэх хувьцаа олдсонгүй.")
 else:
     df = pd.DataFrame(show_data)
     df = df.sort_values(by="potential_raw", ascending=False)
     
-    # ДЭЛГЭЦ ДҮҮРГЭХИЙН ТУЛД ЗҮҮН БАРУУН ТАЛЫГ 50% : 50% ХАРЬЦААТАЙ БОЛГОЛОО
+    # 🖥️ ЗАСВАР: Дэлгэцийг бүтэн дүүргэхийн тулд зүүн баруун талыг [1.0, 1.0] буюу 50%:50% болгов
     col1, col2 = st.columns([1.0, 1.0])
     
     with col1:
@@ -195,9 +199,10 @@ else:
         display_df["Шинжээчдийн Таамаг"] = display_df["Шинжээчдийн Таамаг"].apply(lambda x: f"${x}" if x > 0 else "N/A")
         st.dataframe(display_df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "Сигнал"]], use_container_width=True)
         
+        # CSV татах товчлуур
         csv = df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "P/E", "P/B", "RSI", "Сигнал"]].to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📥 Жагсаалтыг CSV хэлбэрээр татах",
+            label="📥 Шүүсэн жагсаалтыг CSV файл болгож татах",
             data=csv,
             file_name='screener_results.csv',
             mime='text/csv',
@@ -218,12 +223,14 @@ else:
                 delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай"
             )
             st.info(f"""
-            * **Салбар:** {selected_stock['Салбар']} | **Одоогийн RSI:** {selected_stock['RSI']}
-            * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} | **Доод таамаг:** ${selected_stock['low_target']}
+            * **Салбар:** {selected_stock['Салбар']}
+            * **Одоогийн RSI:** {selected_stock['RSI']}
+            * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} 
+            * **Хамгийн бага таамаг:** ${selected_stock['low_target']}
             """)
             
         with tab2:
-            # ӨДӨР ТУТМЫН ҮНИЙН ХӨДӨЛГӨӨНИЙ График (1 жил хүртэлх түүхээр)
+            # 📈 ЗАСВАР: ӨДӨР ТУТМЫН ҮНИЙН ХӨДӨЛГӨӨН
             hist_df = selected_stock["history_df"].reset_index()
             fig_line = go.Figure()
             fig_line.add_trace(go.Scatter(
@@ -231,31 +238,35 @@ else:
                 y=hist_df['Close'],
                 mode='lines',
                 name='Өдрийн хаалтын үнэ',
-                line=dict(color='#2ca02c', width=2)
+                line=dict(color='#00FF00', width=2)
             ))
             fig_line.update_layout(
-                title=f"{selected_ticker} Өдөр тутмын ханшны график",
+                title=f"{selected_ticker} Өдөр тутмын ханшны түүх",
                 xaxis_title="Огноо",
                 yaxis_title="Үнэ ($)",
-                height=420,  # Өндрийг тогтмол зааж өгсөн
+                height=450,
+                template="plotly_dark",
                 margin=dict(l=10, r=10, t=40, b=10)
             )
             st.plotly_chart(fig_line, use_container_width=True)
             
         with tab3:
-            # РАДАР ГРАФИКИЙГ ИЛ ГАРГАХ ЗАСВАР (Тогтмол хэмжээ зааж өгсөн)
+            # 🕸️ ЗАСВАР: РАДАР ГРАФИКИЙГ ТАБ ДОТОР ИЛ ГАРГАХ ШИЙДЭЛ
             radar_df = pd.DataFrame(selected_stock["radar"])
             fig_radar = px.line_polar(
                 radar_df, 
                 r='Оноо', 
                 theta='Үзүүлэлт', 
-                line_close=True,
-                width=420,   # Өргөнийг хатуу заав
-                height=420   # Өндрийг хатуу заав
+                line_close=True
             )
-            fig_radar.update_traces(fill='toself', fillcolor='rgba(44, 160, 44, 0.3)', line_color='#2ca02c')
+            fig_radar.update_traces(fill='toself', fillcolor='rgba(0, 255, 0, 0.2)', line_color='#00FF00')
             fig_radar.update_layout(
-                margin=dict(l=40, r=40, t=40, b=40),
-                polar=dict(radialaxis=dict(visible=True, range=[0, 100]))
+                template="plotly_dark",
+                height=450,                       # Өндрийг тодорхой зааж өгсөн
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 100]),
+                    angularaxis=dict(direction="clockwise")
+                ),
+                margin=dict(l=50, r=50, t=50, b=50)
             )
             st.plotly_chart(fig_radar, use_container_width=True)
