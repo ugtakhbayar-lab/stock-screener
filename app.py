@@ -258,27 +258,7 @@ else:
             )
             st.plotly_chart(fig_line, use_container_width=True)
             
-        with tab3:
-            # 🕸️ ЗАСВАР: РАДАР ГРАФИКИЙГ ТАБ ДОТОР ИЛ ГАРГАХ ШИЙДЭЛ
-            radar_df = pd.DataFrame(selected_stock["radar"])
-            fig_radar = px.line_polar(
-                radar_df, 
-                r='Оноо', 
-                theta='Үзүүлэлт', 
-                line_close=True
-            )
-            fig_radar.update_traces(fill='toself', fillcolor='rgba(0, 255, 0, 0.2)', line_color='#00FF00')
-            fig_radar.update_layout(
-                template="plotly_dark",
-                height=450,                       # Өндрийг тодорхой зааж өгсөн
-                polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 100]),
-                    angularaxis=dict(direction="clockwise")
-                ),
-                margin=dict(l=50, r=50, t=50, b=50)
-            )
-            st.plotly_chart(fig_radar, use_container_width=True)
- with tab3:
+     with tab3:
     # РАДАР ГРАФИКИЙГ ЗӨВ ХАРУУЛАХ ТОХИРГОО
     radar_df = pd.DataFrame(selected_stock["radar"])
     fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
