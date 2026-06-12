@@ -41,9 +41,7 @@ def get_stock_data(ticker, strategy):
         current = info.get('currentPrice') or 1
         rsi = get_rsi(ticker)
         
-        # --- ХАТУУ ШҮҮЛТҮҮР + RSI ---
         passed = False
-        # Зөвхөн RSI < 40 (хямдарсан) хувьцаануудыг л харна
         if rsi < 40:
             if strategy == "1. Төгс боломж" and (0 < pe < 20) and (growth > 0.10): passed = True
             elif strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) >= 0.20: passed = True
@@ -51,7 +49,6 @@ def get_stock_data(ticker, strategy):
         
         if not passed: return None
         
-        # Радар график зурахад зориулсан мэдээлэл
         radar_data = [
             {"Үзүүлэлт": "P/E", "Оноо": max(0, min(100, 100 - pe))},
             {"Үзүүлэлт": "Өсөлт", "Оноо": min(100, growth * 100)},
@@ -60,18 +57,14 @@ def get_stock_data(ticker, strategy):
         ]
         radar_df = pd.DataFrame(radar_data)
 
-        # Сигналын өнгө
-        growth_pot = ((target - current) / current) * 100
-        signal_color = "green" if target > current else "orange"
-
         return {
             "Тикер": ticker,
             "Компани": info.get('longName', ticker),
             "rsi": round(rsi, 1),
             "price": current,
-            "growth_pot": round(growth_pot, 1),
+            "growth_pot": round(((target - current) / current) * 100, 1),
             "radar_df": radar_df,
-            "signal_color": signal_color
+            "signal_color": "green" if target > current else "orange"
         }
     except:
         return None
@@ -82,7 +75,7 @@ strategy = st.sidebar.radio("Сонгох:", ("1. Төгс боломж", "2. Т
 
 if st.button("🚀 ШҮҮЛТҮҮРИЙГ АЖИЛЛУУЛАХ"):
     tickers = get_all_us_tickers()
-    st.info("🔍 Хувьцаануудыг шинжилж байна (RSI шүүлтүүр идэвхжсэн)...")
+    st.info("🔍 Шинжилж байна...")
     results = []
     progress_bar = st.progress(0)
     
@@ -92,52 +85,31 @@ if st.button("🚀 ШҮҮЛТҮҮРИЙГ АЖИЛЛУУЛАХ"):
         progress_bar.progress((i + 1) / len(tickers))
         
     st.session_state.results = results
-    st.success(f"✅ Нийт {len(results)} хувьцаа шалгуурт тэнцлээ.")
+    st.success(f"✅ Нийт {len(results)} хувьцаа тэнцлээ.")
 
-# Үр дүн ба хадгалах хэсэг
+# Үр дүн харуулах
 if 'results' in st.session_state and st.session_state.results:
     df_results = pd.DataFrame(st.session_state.results)
+    display_df = df_results[["Тикер", "Компани", "rsi", "price", "growth_pot"]].copy()
+    display_df['Цаг'] = datetime.datetime.now().strftime("%H:%M")
     
-    # Хүснэгтийн мэдээллийг тохируулах (radar_df-ийг хүснэгтэд харуулахгүй)
-    display_df = df_results[["Тикер", "Компани", "rsi", "price", "growth_pot"]]
-    display_df['Шинжилгээ хийсэн цаг'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    # Хувьцаа сонгох хүснэгт
     selected = st.dataframe(display_df, use_container_width=True, on_select="rerun", selection_mode="single-row")
     
-    # --- CSV ТАТАХ ХЭСЭГ ---
-    st.subheader("💾 Шинжилгээний үр дүнг татах")
-    # CSV файл бэлтгэх (бүх мэдээлэл, radar_df-ээс бусад)
-    csv_df = df_results.drop(columns=['radar_df'])
-    csv_df['Шинжилгээ хийсэн цаг'] = display_df['Шинжилгээ хийсэн цаг']
+    # Аюулгүй CSV татах
+    st.subheader("💾 Үр дүн татах")
+    csv_df = df_results.copy()
+    if 'radar_df' in csv_df.columns: csv_df = csv_df.drop(columns=['radar_df'])
     csv = csv_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Энэ шинжилгээг CSV-ээр татах",
-        data=csv,
-        file_name=f"stock_screener_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-        mime='text/csv'
-    )
-    # ----------------------
-
-    # Сонгосон хувьцааны нарийвчилсан мэдээллийг харуулах
+    st.download_button("CSV-ээр татах", csv, f"results_{datetime.datetime.now().strftime('%Y%m%d')}.csv")
+    
     if selected.selection["rows"]:
         idx = selected.selection["rows"][0]
         stock = st.session_state.results[idx]
         st.divider()
         st.subheader(f"📊 {stock['Тикер']} - {stock['Компани']}")
+        st.markdown(f":{stock['signal_color']}[Сигнал: ХУДАЛДАЖ АВАХ]")
+        st.success(f"📈 Өсөх боломж: {stock['growth_pot']}%")
         
-        # Сигналын өнгө
-        color_text = stock['signal_color']
-        st.markdown(f":{color_text}[Сигнал: ХУДАЛДАЖ АВАХ]")
-        
-        st.success(f"📈 Өсөх боломж: **{stock['growth_pot']}%**")
-        st.metric("Одоогийн RSI", stock['rsi'])
-        st.metric("Одоогийн үнэ", f"${stock['price']}")
-
-        # --- РАДАР ГРАФИК ---
         if 'radar_df' in stock and not stock['radar_df'].empty:
             fig = px.line_polar(stock['radar_df'], r='Оноо', theta='Үзүүлэлт', line_close=True, range_r=[0,100])
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Уучлаарай, энэ хувьцаанд зориулсан радар график алга.")
-        # ------------------
