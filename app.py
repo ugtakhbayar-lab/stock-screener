@@ -11,22 +11,17 @@ def get_all_us_tickers():
     tickers = set()
     try:
         # S&P 500 & 600
-        for url in ['https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 
-                    'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies']:
+        urls = ['https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 
+                'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies',
+                'https://en.wikipedia.org/wiki/Nasdaq-100']
+        for url in urls:
             df = pd.read_html(url)[0]
-            col = 'Symbol' if 'Symbol' in df.columns else 'Ticker symbol'
+            col = 'Symbol' if 'Symbol' in df.columns else 'Ticker' if 'Ticker' in df.columns else 'Ticker symbol'
             tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
-        
-        # Nasdaq-100 болон бусад нэмэлт
-        url_nasdaq = 'https://en.wikipedia.org/wiki/Nasdaq-100'
-        tickers.update(pd.read_html(url_nasdaq)[4]['Ticker'].tolist())
-        
-        # Таны онцолсон хувьцаа болон өсөлтийн хувьцааг гараар нэмэх
-        extra_tickers = {'OSCR', 'HIMS', 'PLTR', 'SOFI', 'ROKU', 'RIVN', 'LCID'}
-        tickers.update(extra_tickers)
-        
+        # Өсөлтийн хувьцааг нэмэх
+        tickers.update({'OSCR', 'HIMS', 'PLTR', 'SOFI', 'ROKU', 'RIVN', 'LCID'})
     except:
-        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'OSCR', 'HIMS'}
+        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'OSCR', 'HIMS', 'PLTR', 'SOFI'}
     return list(tickers)
 
 def calculate_rsi(series, periods=14):
@@ -44,7 +39,7 @@ def process_stock_data(ticker, info, history):
     current = info.get('currentPrice', 1)
     growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
     
-    # Энд зайгүй бичлэгтэй өнгөний код
+    # Зөв бичиглэлтэй өнгөний код
     if rsi < 40: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
     elif rsi < 60: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
@@ -63,7 +58,7 @@ def process_stock_data(ticker, info, history):
 
 def get_screened_data(strat, sector_sel):
     screened = []
-    for t in get_all_us_tickers()[:]: 
+    for t in get_all_us_tickers(): 
         try:
             s = yf.Ticker(t)
             info = s.info
@@ -80,7 +75,7 @@ def get_screened_data(strat, sector_sel):
                 screened.append(process_stock_data(t, info, hist))
             elif strat == "2. Тренд дагах (Уян хатан)" and rsi < 75:
                 screened.append(process_stock_data(t, info, hist))
-            elif strat == "3. Ирээдүйн өсөлт (Turnaround)" and forward_pe > 0 and forward_pe < 25 and rev_growth > 0.15:
+            elif strat == "3. Ирээдүйн өсөлт (Turnaround)" and forward_pe > 0 and forward_pe < 40 and rev_growth > 0.15:
                 screened.append(process_stock_data(t, info, hist))
         except: continue
     return screened
