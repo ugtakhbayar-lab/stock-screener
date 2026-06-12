@@ -2,8 +2,9 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
+st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max", layout="wide")
 
 # 1. ХАЖУУГИЙН ЦЭС (SIDEBAR) - ТОХИРГООНУУД
 st.sidebar.title("⚙️ Ухаалаг Удирдах Цэс")
@@ -93,8 +94,8 @@ def process_stock_data(ticker, info, history):
         "Тикер": ticker,
         "Компани": info.get('longName', ticker),
         "Салбар": sector,
-        "Өнөөгийн Үнэ": f"${current_price}",
-        "Шинжээчдийн Таамаг": f"${target_price}" if target_price else "N/A",
+        "Өнөөгийн Үнэ": current_price,
+        "Шинжээчдийн Таамаг": target_price if target_price else 0,
         "Өсөх Боломж (%)": f"{potential_growth}%" if potential_growth != "N/A" else "N/A",
         "P/E": round(pe, 2) if pe else "N/A",
         "P/B": round(pb, 2) if pb else "N/A",
@@ -104,7 +105,7 @@ def process_stock_data(ticker, info, history):
         "potential_raw": potential_growth if potential_growth != "N/A" else -999,
         "high_target": info.get('targetHighPrice', current_price),
         "low_target": info.get('targetLowPrice', current_price),
-        "close_prices": close_prices,
+        "history_df": history, # График зурахад зориулж бүтэн түүхийг хадгална
         "radar": [
             {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
             {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
@@ -128,7 +129,6 @@ def get_screened_data(strat_selection, sector_sel):
             current_price = info.get('currentPrice')
             sector = info.get('sector', 'Unknown')
             
-            # Салбарын шүүлтүүр шалгах
             if sector_sel != "Бүх салбар" and sector != sector_sel:
                 continue
                 
@@ -170,13 +170,11 @@ if search_ticker:
         s_history = s_stock.history(period="3mo")
         if 'Close' in s_history.columns and len(s_history) >= 30:
             single_stock_view = process_stock_data(search_ticker, s_info, s_history)
-            st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' амжилттай олдлоо! Шүүлтүүр харгалзахгүй харуулж байна.")
+            st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' амжилттай олдлоо!")
     except:
-        st.error(f"❌ '{search_ticker}' тикер олдсонгүй. Зөв бичсэн эсэхээ шалгана уу.")
+        st.error(f"❌ '{search_ticker}' тикер олдсонгүй.")
 
-# ҮНДСЭН ХЭСЭГТ ДАТАГ ХАРУУЛАХ
 if single_stock_view:
-    # Хэрэв хэрэглэгч шууд хайлт хийсэн бол зөвхөн тэр хувьцааг харуулна
     show_data = [single_stock_view]
     selected_ticker = search_ticker
 else:
@@ -195,31 +193,51 @@ else:
         st.subheader(f"🔍 Жагсаалт ({len(df)} компани)")
         if not selected_ticker:
             selected_ticker = st.selectbox("Шинжлэх хувьцааг сонгоно уу:", df["Тикер"].tolist())
-        st.dataframe(df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "Сигнал"]], use_container_width=True)
+            
+        # Форматжуулж харуулах
+        display_df = df.copy()
+        display_df["Өнөөгийн Үнэ"] = display_df["Өнөөгийн Үнэ"].apply(lambda x: f"${x}")
+        display_df["Шинжээчдийн Таамаг"] = display_df["Шинжээчдийн Таамаг"].apply(lambda x: f"${x}" if x > 0 else "N/A")
+        st.dataframe(display_df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "Сигнал"]], use_container_width=True)
+        
+        # 📥 EXCEL/CSV ТАТАЖ АВАХ ТОВЧЛУУР
+        csv = df[["Тикер", "Компани", "Салбар", "Өнөөгийн Үнэ", "Шинжээчдийн Таамаг", "Өсөх Боломж (%)", "P/E", "P/B", "RSI", "Сигнал"]].to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Шүүсэн жагсаалтыг CSV файл болгож татах",
+            data=csv,
+            file_name='screener_results.csv',
+            mime='text/csv',
+        )
         
     with col2:
         selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
         
         st.subheader(f"📊 {selected_ticker} Автомат Зөвлөх")
-        
-        # Сигналыг өнгөтэй хайрцагт харуулах
         st.markdown(f"**Арилжааны Дохио:** :{selected_stock['signal_color']}[{selected_stock['Сигнал']}]")
         
         st.metric(
             label="Шинжээчдийн дундаж бай (Target)", 
-            value=selected_stock["Шинжээчдийн Таамаг"], 
+            value=f"${selected_stock['Шинжээчдийн Таамаг']}" if selected_stock['Шинжээчдийн Таамаг'] > 0 else "N/A", 
             delta=f"{selected_stock['Өсөх Боломж (%)']} Өсөх зай"
         )
         
         st.info(f"""
-        * **Салбар:** {selected_stock['Салбар']}
-        * **Одоогийн RSI:** {selected_stock['RSI']} (30-аас бага бол хямд, 70-аас их бол үнэтэй)
-        * **Хамгийн өндөр таамаг:** {selected_stock['high_target']} | **Доод таамаг:** {selected_stock['low_target']}
+        * **Салбар:** {selected_stock['Sалбар']} | **Одоогийн RSI:** {selected_stock['RSI']}
+        * **Хамгийн өндөр таамаг:** ${selected_stock['high_target']} | **Доод таамаг:** ${selected_stock['low_target']}
         """)
         
+        # 📈 ШИНЭ: ҮНИЙН ТҮҮХИЙН ГРАФИК
+        st.write("---")
+        st.subheader("📉 Ханшны Хөдөлгөөн (Сүүлийн 3 сар)")
+        hist_df = selected_stock["history_df"].reset_index()
+        fig_line = px.line(hist_df, x='Date', y='Close', title=f"{selected_ticker} Үнийн түүх")
+        fig_line.update_layout(xaxis_title="Огноо", yaxis_title="Үнэ ($)")
+        st.plotly_chart(fig_line, use_container_width=True)
+        
+        # РАДАР ГРАФИК
         st.write("---")
         st.subheader("СТРАТЕГИЙН НӨЛӨӨЛӨЛ (Радар график)")
         radar_df = pd.DataFrame(selected_stock["radar"])
-        fig = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
-        fig.update_traces(fill='toself')
-        st.plotly_chart(fig, use_container_width=True)
+        fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
+        fig_radar.update_traces(fill='toself')
+        st.plotly_chart(fig_radar, use_container_width=True)
