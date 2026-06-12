@@ -4,15 +4,13 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# 1. Тохиргоо
+# 🖥️ ДЭЛГЭЦИЙГ ӨРГӨНӨӨР НЬ БҮРЭН ДҮҮРГЭХ
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max", layout="wide")
 
-# 2. Функцууд
+# --- 1. ФУНКЦУУД ---
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    # Энд таны өмнөх бүх тикер татдаг логик байгаа (S&P 500, 600, Russell 2000)
-    # Таны GitHub-аас харагдсан үндсэн тикерүүдийг энд үлдээлээ
-    return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM', 'OSCR']
+    return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM', 'OSCR', 'TSLA', 'NVDA']
 
 def calculate_rsi(series, periods=14):
     delta = series.diff()
@@ -26,7 +24,6 @@ def process_stock_data(ticker, info, history):
     close_prices = history['Close'].dropna()
     rsi = calculate_rsi(close_prices).iloc[-1]
     
-    # Радар графикийн оноо тооцох
     val_score = max(10, min(100, int((60 - (info.get('trailingPE') or 40)) * 2)))
     mom_score = max(10, min(100, int((75 - rsi) * 1.5)))
     growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
@@ -38,6 +35,13 @@ def process_stock_data(ticker, info, history):
         "Салбар": info.get('sector', 'N/A'),
         "Өнөөгийн Үнэ": current_price,
         "history_df": history,
+        "signal_color": "green" if rsi < 55 else "orange",
+        "Сигнал": "Худалдаж авах" if rsi < 55 else "Сууж байх",
+        "RSI": round(rsi, 1),
+        "Шинжээчдийн Таамаг": info.get('targetMeanPrice', 0),
+        "Өсөх Боломж (%)": round(((info.get('targetMeanPrice', 0) - current_price) / current_price) * 100, 1) if current_price and info.get('targetMeanPrice') else 0,
+        "high_target": info.get('targetHighPrice', current_price),
+        "low_target": info.get('targetLowPrice', current_price),
         "radar": [
             {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
             {"Үзүүлэлт": "Өсөлт", "Оноо": mom_score},
@@ -46,37 +50,49 @@ def process_stock_data(ticker, info, history):
         ]
     }
 
-# 3. Үндсэн логик
+# --- 2. SIDEBAR ---
+st.sidebar.title("⚙️ Удирдах Цэс")
+strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах"))
+sector_choice = st.sidebar.selectbox("Салбар:", ("Бүх салбар", "Technology", "Healthcare"))
+search_ticker = st.sidebar.text_input("🔍 Хувьцаа хайх:").upper().strip()
+
+# --- 3. ДАТА ТАТАХ ---
 st.title("📈 Хувьцаа Шүүгч Pro")
 tickers = get_all_us_tickers()
-selected_ticker = st.sidebar.selectbox("Хувьцаа сонгох:", tickers)
 
-stock = yf.Ticker(selected_ticker)
-hist = stock.history(period="1y")
-data = process_stock_data(selected_ticker, stock.info, hist)
+if search_ticker:
+    stock = yf.Ticker(search_ticker)
+    show_data = [process_stock_data(search_ticker, stock.info, stock.history(period="1y"))]
+    selected_ticker = search_ticker
+else:
+    # Энгийн болгохын тулд эхний 5-ыг авлаа, та өөрийн логикоо энд бүрэн оруулна уу
+    show_data = [process_stock_data(t, yf.Ticker(t).info, yf.Ticker(t).history(period="1y")) for t in tickers[:5]]
+    selected_ticker = st.selectbox("Хувьцаа сонгох:", [d["Тикер"] for d in show_data])
 
-# 4. Дэлгэц хуваах
+# --- 4. UI ---
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader(f"{selected_ticker} мэдээлэл")
-    st.write(f"Компани: {data['Компани']}")
-    st.metric("Өнөөгийн Үнэ", f"${data['Өнөөгийн Үнэ']}")
+    st.subheader("Жагсаалт")
+    st.dataframe(pd.DataFrame(show_data)[["Тикер", "Компани", "Өнөөгийн Үнэ"]], use_container_width=True)
 
 with col2:
-    tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 Ханш", "🕸️ Суурь Радар"])
+    selected_stock = next(item for item in show_data if item["Тикер"] == selected_ticker)
+    st.subheader(f"📊 {selected_ticker} Хянах Самбар")
+    
+    tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 Ханш", "🕸️ Радар"])
     
     with tab1:
-        st.write("Салбар:", data['Салбар'])
-    
+        st.markdown(f"**Дохио:** :{selected_stock['signal_color']}[{selected_stock['Сигнал']}]")
+        st.write(f"RSI: {selected_stock['RSI']}")
+        
     with tab2:
-        fig = px.line(data['history_df'], y='Close', title="1 жилийн график")
+        fig = px.line(selected_stock["history_df"], y='Close')
         st.plotly_chart(fig, use_container_width=True)
         
     with tab3:
-        # ЭНЭ ХЭСЭГ ТАНЫ РАДАР ГРАФИКИЙГ ИЛ ГАРГАНА
-        radar_df = pd.DataFrame(data['radar'])
+        radar_df = pd.DataFrame(selected_stock["radar"])
         fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
         fig_radar.update_traces(fill='toself')
-        fig_radar.update_layout(height=400, margin=dict(t=50, b=50))
+        fig_radar.update_layout(height=400, margin=dict(l=40, r=40, t=40, b=40))
         st.plotly_chart(fig_radar, use_container_width=True)
