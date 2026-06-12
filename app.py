@@ -8,30 +8,24 @@ st.title("📈 АНУ-ын Зах зээлийг Бүрэн Шүүгч (3,100+ �
 
 st.write("S&P 500, S&P 600 болон Russell 2000 нийт 3,100 гаруй компанийн датаг татаж байна. Түр хүлээнэ үү...")
 
-# БҮХ 3,100 КОМПАНИЙН ЖАГСААЛТЫГ АВТОМАТ ТАТАХ ФУНКЦ
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
     tickers = []
     try:
-        # 1. S&P 500 (Том компаниуд)
         url_500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
         tickers_500 = pd.read_html(url_500)[0]['Symbol'].str.replace('.', '-', regex=False).tolist()
         tickers.extend(tickers_500)
         
-        # 2. S&P 600 (Жижиг компаниуд)
         url_600 = 'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies'
         tickers_600 = pd.read_html(url_600)[0]['Ticker symbol'].str.replace('.', '-', regex=False).tolist()
         tickers.extend(tickers_600)
         
-        # 3. Russell 2000 (Жижиг, дунд ангиллын бүх компаниуд)
         url_2000 = 'https://en.wikipedia.org/wiki/List_of_Russell_2000_companies'
         tickers_2000 = pd.read_html(url_2000)[0]['Ticker'].str.replace('.', '-', regex=False).tolist()
         tickers.extend(tickers_2000)
         
-        # Давхардсан тикерүүдийг цэвэрлэх
         return list(set(tickers))
     except Exception as e:
-        # Интернетээс татахад алдаа гарвал ажиллах үндсэн суурь
         return ['AAPL', 'MSFT', 'VALE', 'F', 'GM', 'AMD', 'BAC', 'JPM', 'OSCR']
 
 TICKERS = get_all_us_tickers()
@@ -50,8 +44,8 @@ def get_screened_data():
             pe = info.get('trailingPE')
             pb = info.get('priceToBook')
             
-            # Жижиг компаниуд их тул уян хатан шалгууртай: P/E < 35, P/B < 5
-            if pe and pb and pe < 35 and pb < 5:
+            # ШАЛГУУРЫГ УЯН ХАТАН БОЛГОВ (Жижиг компаниудад зориулж)
+            if pb and pb < 6:
                 history = stock.history(period="1mo")
                 if len(history) >= 20:
                     sma_5 = history['Close'].tail(5).mean()
@@ -59,7 +53,9 @@ def get_screened_data():
                     
                     # Богино хугацааны өсөлтийн тренд
                     if sma_5 > sma_20:
-                        val_score = max(10, min(100, int((35 - pe) * 3)))
+                        # P/E байхгүй бол оноог 50 гэж үзнэ
+                        current_pe = pe if pe else 40
+                        val_score = max(10, min(100, int((60 - current_pe) * 2)))
                         mom_score = 95 if sma_5 > sma_20 * 1.02 else 75
                         growth = max(10, min(100, int(info.get('revenueGrowth', 0) * 100)))
                         health = max(10, min(100, int(100 - info.get('debtToEquity', 100) / 2)))
@@ -68,7 +64,7 @@ def get_screened_data():
                             "Тикер": ticker,
                             "Компани": info.get('longName', ticker),
                             "Үнэ": f"${info.get('currentPrice')}",
-                            "P/E": round(pe, 2),
+                            "P/E": round(pe, 2) if pe else "N/A",
                             "P/B": round(pb, 2),
                             "radar": [
                                 {"Үзүүлэлт": "Үнэлгээ", "Оноо": val_score},
@@ -86,7 +82,7 @@ def get_screened_data():
 data = get_screened_data()
 
 if not data:
-    st.warning("Яг одоо энэ том шалгуурт тэнцэх хувьцаа олдсонгүй.")
+    st.warning("Яг одоо энэ уян хатан шалгуурт ч тэнцэх хувьцаа олдсонгүй.")
 else:
     df = pd.DataFrame(data)
     col1, col2 = st.columns([1, 1])
