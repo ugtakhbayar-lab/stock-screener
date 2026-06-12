@@ -25,15 +25,16 @@ def process_stock_data(ticker, info, history):
     current = info.get('currentPrice', 1)
     growth_pot = max(0, min(100, ((target - current) / current) * 100))
     
-    # "ХУДАЛДАЖ АВАХ" гэж зөв бичив
+    # Зөв бичиглэлтэй сигнал
     if rsi < 35: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
     elif rsi < 55: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
     
-    # РАДАРЫН ШАЛГУУР (Энд өөрийн хүссэнээр өөрчлөх боломжтой)
+    # Радарын шалгуур (P/E бага байх тусам оноо өндөр гарна)
+    pe_score = max(0, 100 - (pe * 2))
     radar_df = pd.DataFrame({
         "Үзүүлэлт": ["RSI (Хүч)", "Үнэлгээ (P/E)", "Өсөлтийн Боломж"], 
-        "Оноо": [max(0, 100 - rsi), max(0, 100 - min(pe, 100)), growth_pot]
+        "Оноо": [max(0, 100 - rsi), pe_score, growth_pot]
     })
     
     return {
@@ -76,6 +77,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
+            # Зөв бичиглэлтэй Markdown (зайгүй)
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
         with tab2:
             st.plotly_chart(px.line(stock['history_df'], y='Close'), use_container_width=True)
