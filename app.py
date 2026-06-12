@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="Хувьцаа Шүүгч", layout="wide")
 st.title("📈 Богино хугацааны өсөлттэй Хямд хувьцаа шүүгч")
 
-# Шүүх хувьцааны жагсаалтыг 30 болгож ИХЭСГЭВ (Илүү олон сонголттой болгов)
+# Шүүх хувьцааны жагсаалт
 TICKERS = [
     'AAPL', 'TSLA', 'NVDA', 'INTC', 'VALE', 'F', 'GM', 'XOM', 'T', 'VZ', 
     'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX', 'AMD', 'BAC', 'JPM', 'WMT', 'DIS',
@@ -25,7 +25,7 @@ def get_screened_data():
             pe = info.get('trailingPE')
             pb = info.get('priceToBook')
             
-            # Шалгуурыг арай уян хатан болгов: P/E < 35 ба P/B < 5
+            # Шалгуур: P/E < 35 ба P/B < 5
             if pe and pb and pe < 35 and pb < 5:
                 history = stock.history(period="1mo")
                 if len(history) >= 20:
@@ -74,5 +74,8 @@ else:
         selected_stock = next(item for item in data if item["Тикер"] == selected_ticker)
         radar_df = pd.DataFrame(selected_stock["radar"])
         fig = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
-        fig.update_traces(fill='subsection')
+        
+        # АЛДААТАЙ БАЙСАН ХЭСГИЙГ ЗАССАН: 'toself' болгов
+        fig.update_traces(fill='toself') 
+        
         st.plotly_chart(fig, use_container_width=True)
