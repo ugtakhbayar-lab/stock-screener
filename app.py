@@ -7,23 +7,24 @@ import requests
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
 
-@st.cache_data(ttl=86400)
+# КЭШ-ийг 1 секунд болгож цэвэрлэв
+@st.cache_data(ttl=1)
 def get_all_us_tickers():
     tickers = set()
-    # 1. S&P 500 (CSV)
+    # S&P 500
     try:
         url_sp = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
         df_sp = pd.read_csv(url_sp)
         tickers.update(df_sp['Symbol'].astype(str).tolist())
     except: pass
     
-    # 2. Russell 2000 (Wiki - илүү баттай)
+    # Russell 2000
     try:
         url_r2k = "https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies"
         df_r2k = pd.read_html(url_r2k)[0]
         tickers.update(df_r2k['Ticker'].astype(str).tolist())
     except: pass
-        
+    
     return [t.replace('.', '-') for t in list(tickers)]
 
 def get_stock_data(ticker, strategy):
@@ -37,11 +38,9 @@ def get_stock_data(ticker, strategy):
         growth = info.get('revenueGrowth') or 0
         target = info.get('targetMeanPrice') or 0
         current = info.get('currentPrice') or 1
-        
         if strategy == "1. Төгс боломж" and not (0 < pe < 20 and growth > 0.1): return None
         if strategy == "2. Тренд дагах (Уян хатан)" and ((target - current) / current) < 0.1: return None
         if strategy == "3. Ирээдүйн өсөлт (Turnaround)" and not (0 < fpe < 25 and growth > 0.2): return None
-        
         radar_df = pd.DataFrame({"Үзүүлэлт": ["RSI", "P/E", "Өсөлт"], "Оноо": [50, max(0, 100 - (pe*2)), min(100, growth*1000)]})
         return {"Тикер": ticker, "Компани": info.get('longName', ticker), "info": info, "hist": hist, "radar": radar_df, "growth_pot": round(((target - current) / current) * 100, 1), "signal_color": "green"}
     except: return None
@@ -51,7 +50,7 @@ strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2
 
 if st.button("🚀 БҮХ ХУВЬЦААГ ШҮҮХ"):
     all_tickers = get_all_us_tickers()
-    st.write(f"🌐 {len(all_tickers)} хувьцаа шүүж байна...")
+    st.write(f"🌐 {len(all_tickers)} хувьцаа шүүж эхэллээ...")
     data = []
     progress_bar = st.progress(0)
     for i, t in enumerate(all_tickers):
