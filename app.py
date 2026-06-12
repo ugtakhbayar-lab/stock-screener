@@ -133,7 +133,7 @@ def get_screened_data(strat_selection, sector_sel):
                 continue
                 
             if pb and pb < 5 and current_price:
-                history = stock.history(period="3mo")
+                history = stock.history(period="3mo") # ЗАСВАР: Түүхийн өгөгдлийг 3 сараар татах (period="3mo")
                 if len(history) >= 30:
                     close_prices = history['Close'].dropna()
                     rsi_series = calculate_rsi(close_prices)
@@ -167,7 +167,7 @@ if search_ticker:
     try:
         s_stock = yf.Ticker(search_ticker)
         s_info = s_stock.info
-        s_history = s_stock.history(period="3mo")
+        s_history = s_stock.history(period="max") # ЗАСВАР: Хайлтын үед хамгийн их түүхийг татах (period="max")
         if 'Close' in s_history.columns and len(s_history) >= 30:
             single_stock_view = process_stock_data(search_ticker, s_info, s_history)
             st.success(f"🔍 Хайсан хувьцаа '{search_ticker}' амжилттай олдлоо!")
@@ -231,14 +231,25 @@ else:
             """)
             
         with tab2:
+            # ЗАСВАР: Ханшны графикийг Plotly-ээр өдөр тутмын (Daily Open-Close) ханшаар харуулах
             hist_df = selected_stock["history_df"].reset_index()
-            fig_line = px.line(hist_df, x='Date', y='Close', title=f"{selected_ticker} Сүүлийн 3 сар")
-            fig_line.update_layout(xaxis_title="Огноо", yaxis_title="Үнэ ($)", margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_line, use_container_width=True) # ЗАСВАР: fig_line дамжуулсан
+            fig_line = go.Figure()
+            # Өдөр тутмын ханш (Daily Close) - шугаман график
+            fig_line.add_trace(go.Scatter(x=hist_df['Date'], y=hist_df['Close'],
+                                mode='lines',
+                                name='Daily Close'))
+            # Нэмэлтээр Open-High-Low график (Candlestick) оруулж болно
+            # fig_line.add_trace(go.Candlestick(x=hist_df['Date'],
+            #                 open=hist_df['Open'],
+            #                 high=hist_df['High'],
+            #                 low=hist_df['Low'],
+            #                 close=hist_df['Close'], name='Market Data'))
+            fig_line.update_layout(title=f"{selected_ticker} Ханшны түүх (Daily)", xaxis_title="Огноо", yaxis_title="Үнэ ($)")
+            st.plotly_chart(fig_line, use_container_width=True)
             
         with tab3:
             radar_df = pd.DataFrame(selected_stock["radar"])
+            # ЗАСВАР: `st.plotly_chart` дээр `fig_radar` хувьсагчийг зөв дамжуулсан
             fig_radar = px.line_polar(radar_df, r='Оноо', theta='Үзүүлэлт', line_close=True)
             fig_radar.update_traces(fill='toself')
-            fig_radar.update_layout(margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_radar, use_container_width=True) # ЗАСВАР: fig_radar дамжуулсан
+            st.plotly_chart(fig_radar, use_container_width=True) # Энд график хувьсагчийг дамжуулах шаардлагатай
