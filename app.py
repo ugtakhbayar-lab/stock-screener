@@ -10,17 +10,23 @@ st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro Max"
 def get_all_us_tickers():
     tickers = set()
     try:
+        # S&P 500 & 600
         for url in ['https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 
                     'https://en.wikipedia.org/wiki/List_of_S%26P_600_companies']:
             df = pd.read_html(url)[0]
             col = 'Symbol' if 'Symbol' in df.columns else 'Ticker symbol'
             tickers.update(df[col].str.replace('.', '-', regex=False).tolist())
+        
+        # Nasdaq-100 болон бусад нэмэлт
         url_nasdaq = 'https://en.wikipedia.org/wiki/Nasdaq-100'
         tickers.update(pd.read_html(url_nasdaq)[4]['Ticker'].tolist())
-        url_russell = 'https://en.wikipedia.org/wiki/List_of_Russell_2000_component_companies'
-        tickers.update(pd.read_html(url_russell)[0]['Ticker'].tolist()[:200])
+        
+        # Таны онцолсон хувьцаа болон өсөлтийн хувьцааг гараар нэмэх
+        extra_tickers = {'OSCR', 'HIMS', 'PLTR', 'SOFI', 'ROKU', 'RIVN', 'LCID'}
+        tickers.update(extra_tickers)
+        
     except:
-        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'GOOGL', 'AMZN'}
+        tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'OSCR', 'HIMS'}
     return list(tickers)
 
 def calculate_rsi(series, periods=14):
@@ -38,6 +44,7 @@ def process_stock_data(ticker, info, history):
     current = info.get('currentPrice', 1)
     growth_pot = round(((target - current) / current) * 100, 1) if target and current else 0
     
+    # Энд зайгүй бичлэгтэй өнгөний код
     if rsi < 40: signal, color = "🚨 ХҮЧТЭЙ ХУДАЛДАЖ АВАХ", "green"
     elif rsi < 60: signal, color = "✅ ХУДАЛДАЖ АВАХ", "lightgreen"
     else: signal, color = "🔲 СУУЖ БАЙХ", "orange"
@@ -68,6 +75,7 @@ def get_screened_data(strat, sector_sel):
             rev_growth = info.get('revenueGrowth', 0) or 0
             rsi = calculate_rsi(hist['Close']).iloc[-1]
             
+            # Стратегиуд
             if strat == "1. Төгс боломж (Хатуу)" and 0 < pe < 30 and rsi < 50:
                 screened.append(process_stock_data(t, info, hist))
             elif strat == "2. Тренд дагах (Уян хатан)" and rsi < 75:
@@ -77,12 +85,13 @@ def get_screened_data(strat, sector_sel):
         except: continue
     return screened
 
+# UI
 st.sidebar.title("⚙️ Удирдах Цэс")
 strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж (Хатуу)", "2. Тренд дагах (Уян хатан)", "3. Ирээдүйн өсөлт (Turnaround)"))
 sector = st.sidebar.selectbox("Салбар:", ["Бүх салбар", "Technology", "Healthcare"])
 
 if st.sidebar.button("🚀 Хувьцааг Шүүх"):
-    with st.spinner("3000+ хувьцааг шүүж байна..."):
+    with st.spinner("Хувьцаануудыг шүүж байна..."):
         st.session_state.data = get_screened_data(strategy, sector)
 
 if 'data' in st.session_state and st.session_state.data:
@@ -98,7 +107,7 @@ if 'data' in st.session_state and st.session_state.data:
         tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📉 График", "🕸️ Радар"])
         with tab1:
             st.info(f"Салбар: {stock['Салбар']} | RSI: {stock['RSI']}")
-            # ЗАЙГҮЙ БИЧИХ (':')
+            # ЗАЙГҮЙ БИЧИХ ДҮРЭМ (:color[text] загвар)
             st.markdown(f"**Сигнал:** :{stock['signal_color']}[{stock['Сигнал']}]")
             st.success(f"📈 Шинжээчдийн таамгаар өсөх боломж: **{stock['Өсөх Боломж']}**")
         with tab2:
