@@ -5,35 +5,42 @@ import plotly.express as px
 
 st.set_page_config(page_title="Ухаалаг Хувьцаа Шүүгч Pro", layout="wide")
 
-if 'watchlist' not in st.session_state: st.session_state.watchlist = set()
+if 'watchlist' not in st.session_state: 
+    st.session_state.watchlist = set()
 
 @st.cache_data(ttl=86400)
 def get_all_us_tickers():
-    tickers = {'AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'OSCR', 'HIMS', 'PLTR', 'SOFI'}
-    return list(tickers)
+    return ['AAPL', 'MSFT', 'AMD', 'NVDA', 'TSLA', 'OSCR', 'HIMS', 'PLTR', 'SOFI']
 
 def get_stock_details(ticker):
     s = yf.Ticker(ticker)
-    info = s.info
-    hist = s.history(period="1y")
-    rsi = 50 
-    return {
-        "Тикер": ticker, "Компани": info.get('longName', ticker),
-        "RSI": round(rsi, 1), "info": info, "hist": hist, 
-        "news": s.news[:3], "signal_color": "green"
-    }
+    try:
+        info = s.info
+        hist = s.history(period="1y")
+        # KeyError гаргахгүйгээр мэдээлэл авах
+        return {
+            "Тикер": ticker, 
+            "Компани": info.get('longName', ticker),
+            "info": info, 
+            "hist": hist, 
+            "news": s.news[:3] if hasattr(s, 'news') else [],
+            "signal_color": "green"
+        }
+    except:
+        return None
 
 st.sidebar.title("⚙️ Удирдах Цэс")
-strategy = st.sidebar.radio("Стратеги:", ("1. Төгс боломж", "2. Тренд дагах", "3. Ирээдүйн өсөлт"))
+if st.sidebar.button("🚀 Хувьцаануудыг Шүүх"):
+    data = []
+    for t in get_all_us_tickers():
+        res = get_stock_details(t)
+        if res: data.append(res)
+    st.session_state.data = data
 
-if st.sidebar.button("🚀 Шүүх"):
-    st.session_state.data = [get_stock_details(t) for t in get_all_us_tickers()]
-
-if 'data' in st.session_state:
+if 'data' in st.session_state and st.session_state.data:
     df = pd.DataFrame(st.session_state.data)
     st.subheader("🔍 Жагсаалт (Сонгоно уу)")
     
-    # Хүснэгтээс сонгох
     selected_ticker = st.selectbox("Хувьцаа сонгох:", df["Тикер"].tolist())
     stock = next(item for item in st.session_state.data if item["Тикер"] == selected_ticker)
     
@@ -45,16 +52,28 @@ if 'data' in st.session_state:
     tab1, tab2, tab3 = st.tabs(["💡 Зөвлөх", "📰 Мэдээ", "📉 График"])
     
     with tab1:
-        st.write(f"Салбар: {stock['info'].get('sector', 'N/A')}")
-        # ЭНД ЗАЙГҮЙ БИЧИВ (Өнгө заавал гарна)
+        # KeyError-аас хамгаалсан дуудлага
+        sector = stock['info'].get('sector', 'N/A')
+        st.write(f"Салбар: {sector}")
+        # Зайгүй бичих дүрэм (Өнгө зөв гарна)
         st.markdown(f"**Сигнал:** :{stock['signal_color']}[ХУДАЛДАЖ АВАХ]")
     
     with tab2:
-        for news in stock['news']:
-            st.write(f"[{news['title']}]({news['link']})")
+        news_list = stock.get('news', [])
+        if news_list:
+            for news in news_list:
+                st.write(f"[{news.get('title', 'Мэдээгүй')}]({news.get('link', '#')})")
+        else:
+            st.write("Мэдээ олдсонгүй.")
             
     with tab3:
-        st.plotly_chart(px.line(stock['hist'], y='Close'), use_container_width=True)
+        if not stock['hist'].empty:
+            st.plotly_chart(px.line(stock['hist'], y='Close'), use_container_width=True)
+        else:
+            st.warning("График байхгүй байна.")
 
 st.sidebar.subheader("⭐ Миний Watchlist")
-st.sidebar.write(", ".join(list(st.session_state.watchlist)))
+if st.session_state.watchlist:
+    st.sidebar.write(", ".join(list(st.session_state.watchlist)))
+else:
+    st.sidebar.write("Жагсаалт хоосон байна.")
