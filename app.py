@@ -377,4 +377,212 @@ if run_btn:
     results = []
     for i, t in enumerate(tickers):
         status_empty.caption(f"🔍 {t}  —  {i+1} / {len(tickers)}  |  Олдсон: {len(results)}")
-        data = get_stock_data(t, strategy, min_cap=min
+        data = get_stock_data(t, strategy, min_cap=min_cap)
+        if data:
+            results.append(data)
+        progress_bar.progress((i + 1) / len(tickers))
+    results.sort(key=lambda x: x['score'], reverse=True)
+    results = results[:max_results]
+    progress_bar.empty()
+    status_empty.empty()
+    st.session_state.results = results
+    st.session_state.strategy = strategy
+    st.rerun()
+
+
+# ─── ҮР ДҮН ──────────────────────────────────────────────────────────────────
+if 'results' in st.session_state and st.session_state.results:
+    results = st.session_state.results
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("✅ Олдсон хувьцаа", len(results))
+    c2.metric("🏆 Шилдэг оноо", f"{results[0]['score']}/100")
+    c3.metric("📈 Дундаж зорилт (12 сар)", f"{round(sum(r['upside'] for r in results)/len(results),1)}%")
+    c4.metric("📊 Стратеги", st.session_state.get('strategy', '—')[:20])
+
+    st.markdown("### 🏆 Шүүгчийн үр дүн — хувьцааг сонгоод дэлгэрэнгүй харна уу")
+
+    display_rows = []
+    for r in results:
+        months_str = f"~{r['months_est']} сар" if r.get('months_est') else "—"
+        display_rows.append({
+            "Тикер": r['Тикер'],
+            "Компани": r['Компани'][:28],
+            "Оноо": r['score'],
+            "Сигнал": r['signal'],
+            "Үнэ ($)": r['price'],
+            "12 сарын зорилт %": r['upside'],
+            "Хүрэх хугацаа": months_str,
+            "1 сарын өсөлт %": r['mom_1m'],
+            "RSI (0-100)": r['rsi'],
+            "Салбар": r['Салбар'],
+        })
+
+    df_disp = pd.DataFrame(display_rows)
+    selected = st.dataframe(
+        df_disp,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        hide_index=True,
+        column_config={
+            "Оноо": st.column_config.ProgressColumn("Оноо", min_value=0, max_value=100, format="%d"),
+            "12 сарын зорилт %": st.column_config.NumberColumn(format="%.1f%%"),
+            "1 сарын өсөлт %": st.column_config.NumberColumn(format="%.1f%%"),
+        }
+    )
+
+    if selected.selection.rows:
+        idx = selected.selection.rows[0]
+        stock = results[idx]
+        st.divider()
+
+        hdr1, hdr2 = st.columns([3, 1])
+        with hdr1:
+            st.markdown(f"## {stock['Тикер']}  —  {stock['Компани']}")
+            st.caption(f"📂 {stock['Салбар']}  |  Market Cap: {fmt_cap(stock['market_cap'])}  |  Beta (эрсдэл): {stock['beta']}")
+        with hdr2:
+            st.markdown(f"### {stock['signal']}")
+            st.markdown(f"**Нийт оноо: `{stock['score']} / 100`**")
+            if stock.get('months_est'):
+                st.info(f"⏱️ Зорилтод хүрэх\nойролцоо хугацаа:\n**~{stock['months_est']} сар**")
+
+        # Үндсэн метрик
+        st.markdown("#### 📊 Үндсэн үзүүлэлтүүд")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Одоогийн үнэ", f"${stock['price']}")
+        m2.metric("🎯 12 сарын аналист зорилт", f"{stock['upside']}%",
+                  help="Аналистуудын тавьсан 12 сарын дундаж зорилтот үнэтэй харьцуулсан өсөх боломж")
+        m3.metric("⏱️ Зорилтод хүрэх хугацаа",
+                  f"~{stock['months_est']} сар" if stock.get('months_est') else "—",
+                  help="Сүүлийн 1 сарын моментумаар тооцсон ойролцоо хугацаа")
+
+        m4, m5, m6 = st.columns(3)
+        m4.metric(
+            "📊 RSI (хэт борлуулагдсан эсэх)",
+            stock['rsi'],
+            help="Relative Strength Index. 0-30: хэт их зарагдсан (авах боломж), 70+: хэт их худалдагдсан (эрсдэлтэй)"
+        )
+        m5.metric(
+            "📉 P/E (үнэ/ашгийн харьцаа)",
+            stock['pe'],
+            help="Price-to-Earnings. Бага байх тусам хямд үнэлгээтэй. 15 доош = хямд, 30+ = үнэтэй"
+        )
+        m6.metric(
+            "🔮 Fwd P/E (ирээдүйн үнэлгээ)",
+            stock['fpe'],
+            help="Forward P/E. Ирээдүйн ашгаар тооцсон үнэлгээ. Trailing P/E-ээс бага байвал өсөлт хүлээгдэж байна"
+        )
+
+        m7, m8, m9 = st.columns(3)
+        m7.metric(
+            "📈 1 сарын моментум (үнийн хурд)",
+            f"{stock['mom_1m']}%",
+            help="Momentum: сүүлийн 1 сарын хугацаанд үнэ хэдэн % өссөн/буурсан"
+        )
+        m8.metric(
+            "📈 3 сарын моментум",
+            f"{stock['mom_3m']}%",
+            help="Сүүлийн 3 сарын үнийн өөрчлөлт"
+        )
+        m9.metric(
+            "📊 MACD (чиглэлийн үзүүлэлт)",
+            "Эерэг 📈" if stock['macd_hist'] > 0 else "Сөрөг 📉",
+            help="Moving Average Convergence Divergence. Эерэг = дээш чиглэл, Сөрөг = доош чиглэл"
+        )
+
+        # Графикууд
+        ch1, ch2 = st.columns(2)
+        with ch1:
+            st.subheader("📈 6 сарын үнийн хэлбэлзэл")
+            hist_data = yf.Ticker(stock['Тикер']).history(period="6mo")
+            if not hist_data.empty:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=hist_data.index, y=hist_data['Close'],
+                    mode='lines', fill='tozeroy',
+                    line=dict(color='#58a6ff', width=2),
+                    fillcolor='rgba(88,166,255,0.1)',
+                    name='Хаалтын үнэ'
+                ))
+                ma20 = hist_data['Close'].rolling(20).mean()
+                fig.add_trace(go.Scatter(
+                    x=hist_data.index, y=ma20, mode='lines',
+                    line=dict(color='#f0883e', width=1.5, dash='dot'),
+                    name='MA20 (20 өдрийн дундаж)'
+                ))
+                fig.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    legend=dict(orientation='h', yanchor='bottom', y=1),
+                    xaxis=dict(gridcolor='rgba(255,255,255,0.06)', showgrid=True),
+                    yaxis=dict(gridcolor='rgba(255,255,255,0.06)', showgrid=True),
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    height=280
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        with ch2:
+            st.subheader("🎯 Стратегийн нүүлэлт")
+            fig2 = px.line_polar(
+                stock['radar_df'], r='Оноо', theta='Үзүүлэлт',
+                line_close=True, range_r=[0, 100],
+                color_discrete_sequence=['#58a6ff']
+            )
+            fig2.update_traces(fill='toself', fillcolor='rgba(88,166,255,0.18)', line=dict(width=2))
+            fig2.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                polar=dict(
+                    bgcolor='rgba(0,0,0,0)',
+                    radialaxis=dict(gridcolor='rgba(255,255,255,0.1)', tickfont_size=9),
+                    angularaxis=dict(gridcolor='rgba(255,255,255,0.1)')
+                ),
+                margin=dict(l=20, r=20, t=30, b=20),
+                height=280
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+        st.subheader("📊 Volume — эзлэхүүн (6 сар)")
+        st.caption("Ногоон = өсөлттэй өдөр, Улаан = уналттай өдөр")
+        if not hist_data.empty:
+            vol_colors = ['#3fb950' if c >= o else '#f85149'
+                          for c, o in zip(hist_data['Close'], hist_data['Open'])]
+            fig3 = go.Figure(go.Bar(
+                x=hist_data.index, y=hist_data['Volume'],
+                marker_color=vol_colors, opacity=0.7, name='Volume'
+            ))
+            fig3.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(gridcolor='rgba(255,255,255,0.06)'),
+                yaxis=dict(gridcolor='rgba(255,255,255,0.06)'),
+                margin=dict(l=0, r=0, t=10, b=0),
+                height=180
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+
+        st.subheader("📋 Аналистын мэдээлэл")
+        ai1, ai2, ai3 = st.columns(3)
+        rec_label = {1: "Хүчтэй Худалдаж ав ⭐⭐⭐", 2: "Худалдаж ав ⭐⭐", 3: "Хадгал ➖", 4: "Зар ⚠️", 5: "Хүчтэй Зар 🚨"}
+        rec_val = int(round(stock['analyst_rec'])) if isinstance(stock['analyst_rec'], float) else 3
+        ai1.metric("Аналистын дундаж үнэлгээ", rec_label.get(rec_val, "—"))
+        ai2.metric("Үнэлгээ өгсөн аналистын тоо", stock['analyst_count'])
+        ai3.metric("Ашгийн өсөлт (орлого)", f"{stock['earn_growth']}%")
+
+elif 'results' in st.session_state and not st.session_state.results:
+    st.warning("⚠️ Шалгуур хангасан хувьцаа олдсонгүй. Өөр стратеги туршина уу.")
+
+else:
+    st.markdown("""
+    ### 👋 Тавтай морил!
+
+    Зүүн цэснээс **стратеги сонгоод** 🚀 товчийг дарна уу.
+
+    | Стратеги | Зориулалт | Хамгийн тохиромжтой |
+    |----------|-----------|---------------------|
+    | 📉 Төгс боломж | Хямдарсан, дутуу үнэлэгдсэн хувьцаа | Урт хугацааны хөрөнгө оруулагч |
+    | 📈 Тренд дагах | Өсч байгаа хувьцааны тренд | Идэвхтэй трейдер |
+    | 🚀 Ирээдүйн өсөлт | Хурдацтай өсөлттэй компани | Өсөлтийн хөрөнгө оруулагч |
+
+    > ⚠️ Энэхүү апп нь мэдээлэл өгөх зорилготой бөгөөд хөрөнгө оруулалтын зөвлөгөө биш болно.
+    """)
