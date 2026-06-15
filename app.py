@@ -22,12 +22,20 @@ st.markdown("""
     }
     .main-header h1 { color: #58a6ff; font-size: 2.2rem; font-weight: 800; margin: 0; }
     .main-header p  { color: #8b949e; margin: 0.4rem 0 0; font-size: 1rem; }
-    .badge-buy   { background:#1a7f64; color:#fff; padding:4px 14px; border-radius:20px; font-weight:700; }
-    .badge-watch { background:#9a6700; color:#fff; padding:4px 14px; border-radius:20px; font-weight:700; }
-    .badge-hold  { background:#6e3c14; color:#fff; padding:4px 14px; border-radius:20px; font-weight:700; }
-    .score-label { font-size:0.85rem; color:#8b949e; }
-    [data-testid="stSidebar"] { background: #0d1117; border-right: 1px solid #21262d; }
-    [data-testid="stSidebar"] .stRadio label { color: #c9d1d9 !important; }
+
+    /* ── Sidebar бүх текстийг цагаан болгох ── */
+    [data-testid="stSidebar"] { background: #0d1117 !important; border-right: 1px solid #21262d; }
+    [data-testid="stSidebar"] * { color: #e6edf3 !important; }
+    [data-testid="stSidebar"] h2 { color: #58a6ff !important; font-size: 1.2rem; }
+    [data-testid="stSidebar"] .stSelectbox label { color: #e6edf3 !important; }
+    [data-testid="stSidebar"] .stRadio label { color: #e6edf3 !important; }
+    [data-testid="stSidebar"] .stSlider label { color: #e6edf3 !important; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #c9d1d9 !important; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li { color: #c9d1d9 !important; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] strong { color: #e6edf3 !important; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] em { color: #8b949e !important; }
+    [data-testid="baseButton-primary"] { background: linear-gradient(135deg, #1158a6, #58a6ff) !important; color: #fff !important; }
+
     .stDataFrame tbody tr:hover { background: rgba(88,166,255,0.07) !important; }
     [data-testid="stMetricDelta"] svg { display:none; }
 </style>
@@ -115,6 +123,14 @@ def calc_momentum(prices, days=22):
     if len(prices) < days:
         return 0.0
     return round((prices.iloc[-1] / prices.iloc[-days] - 1) * 100, 2)
+
+
+def estimate_months_to_target(upside, mom_1m):
+    """Аналистын зорилтод хүрэх ойролцоо хугацаа (сараар)"""
+    if upside <= 0 or mom_1m <= 0:
+        return None
+    months = round(upside / max(mom_1m, 0.5))
+    return max(1, min(months, 24))
 
 
 def calc_score(pe, fpe, growth, rsi, upside, macd_hist, analyst_rec, strategy):
@@ -217,6 +233,7 @@ def get_stock_data(ticker, strategy, min_cap=2_000_000_000):
         avg_vol = hist['Volume'].mean()
         recent_vol = hist['Volume'].iloc[-5:].mean()
         vol_ratio = round(recent_vol / avg_vol, 2) if avg_vol > 0 else 1
+        months_est = estimate_months_to_target(upside, mom_1m)
         passed = False
         if strategy == "1. Төгс боломж":
             passed = (rsi < 40 and 0 < pe < 20 and growth > 0.08 and upside > 15)
@@ -282,6 +299,8 @@ def get_stock_data(ticker, strategy, min_cap=2_000_000_000):
             "signal": signal_text,
             "signal_color": signal_color,
             "radar_df": radar_df,
+            "months_est": months_est,
+            "macd_hist": round(macd_hist, 4),
         }
     except:
         return None
@@ -309,9 +328,30 @@ with st.sidebar:
     )
     st.markdown("---")
     desc = {
-        "1. Төгс боломж": "**📉 Дутуу үнэлэгдсэн хувьцаа**\n\n- RSI < 40\n- P/E < 20\n- Өсөлт > 8%\n- Зорилт > 15%",
-        "2. Тренд дагах (Уян хатан)": "**📈 Моментум тренд**\n\n- RSI 50–72\n- MACD эерэг\n- 1 сард өсөлттэй\n- Зорилт > 15%",
-        "3. Ирээдүйн өсөлт (Turnaround)": "**🚀 Хурдацтай өсөлт**\n\n- Өсөлт > 12%\n- Fwd P/E < 28\n- RSI < 60\n- Зорилт > 15%",
+        "1. Төгс боломж": (
+            "**📉 Дутуу үнэлэгдсэн хувьцаа**\n\n"
+            "- RSI < 40 *(хэт их зарагдсан)*\n"
+            "- P/E < 20 *(хямд үнэлгээ)*\n"
+            "- Орлогын өсөлт > 8%\n"
+            "- Аналист зорилт > 15% дээш\n\n"
+            "*Зах зээл хэт унагасан боловч үндсэн үзүүлэлт сайн хувьцааг олно.*"
+        ),
+        "2. Тренд дагах (Уян хатан)": (
+            "**📈 Моментум тренд**\n\n"
+            "- RSI 50–72 *(өсөлтийн бүс)*\n"
+            "- MACD эерэг *(дээш чиглэл)*\n"
+            "- Сүүлийн 1 сард өсөлттэй\n"
+            "- Аналист зорилт > 15%\n\n"
+            "*Өсч байгаа хувьцааны трендийг дагана.*"
+        ),
+        "3. Ирээдүйн өсөлт (Turnaround)": (
+            "**🚀 Хурдацтай өсөлт**\n\n"
+            "- Орлогын өсөлт > 12%\n"
+            "- Forward P/E < 28 *(ирээдүйн үнэлгээ)*\n"
+            "- RSI < 60 *(хэт халаагүй)*\n"
+            "- Аналист зорилт > 15%\n\n"
+            "*Ирээдүйд хурдацтай өсөх боломжтой компани.*"
+        ),
     }
     st.info(desc[strategy])
     st.markdown("---")
@@ -337,164 +377,4 @@ if run_btn:
     results = []
     for i, t in enumerate(tickers):
         status_empty.caption(f"🔍 {t}  —  {i+1} / {len(tickers)}  |  Олдсон: {len(results)}")
-        data = get_stock_data(t, strategy, min_cap=min_cap)
-        if data:
-            results.append(data)
-        progress_bar.progress((i + 1) / len(tickers))
-    results.sort(key=lambda x: x['score'], reverse=True)
-    results = results[:max_results]
-    progress_bar.empty()
-    status_empty.empty()
-    st.session_state.results = results
-    st.session_state.strategy = strategy
-    st.rerun()
-
-
-# ─── ҮР ДҮН ──────────────────────────────────────────────────────────────────
-if 'results' in st.session_state and st.session_state.results:
-    results = st.session_state.results
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("✅ Олдсон хувьцаа", len(results))
-    c2.metric("🏆 Шилдэг оноо", f"{results[0]['score']}/100")
-    c3.metric("📈 Дундаж upside", f"{round(sum(r['upside'] for r in results)/len(results),1)}%")
-    c4.metric("📊 Стратеги", st.session_state.get('strategy', '—')[:20])
-    st.markdown("### 🏆 Шүүгчийн үр дүн — хувьцааг сонгоод дэлгэрэнгүй харна уу")
-    display_rows = []
-    for r in results:
-        display_rows.append({
-            "Тикер": r['Тикер'],
-            "Компани": r['Компани'][:32],
-            "Оноо": r['score'],
-            "Сигнал": r['signal'],
-            "Үнэ ($)": r['price'],
-            "Өсөх боломж %": r['upside'],
-            "RSI": r['rsi'],
-            "1M Моментум %": r['mom_1m'],
-            "Салбар": r['Салбар'],
-        })
-    df_disp = pd.DataFrame(display_rows)
-    selected = st.dataframe(
-        df_disp,
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        hide_index=True,
-        column_config={
-            "Оноо": st.column_config.ProgressColumn("Оноо", min_value=0, max_value=100, format="%d"),
-            "Өсөх боломж %": st.column_config.NumberColumn(format="%.1f%%"),
-            "1M Моментум %": st.column_config.NumberColumn(format="%.1f%%"),
-        }
-    )
-    if selected.selection.rows:
-        idx = selected.selection.rows[0]
-        stock = results[idx]
-        st.divider()
-        hdr1, hdr2 = st.columns([3, 1])
-        with hdr1:
-            st.markdown(f"## {stock['Тикер']}  —  {stock['Компани']}")
-            st.caption(f"📂 {stock['Салбар']}  |  Market Cap: {fmt_cap(stock['market_cap'])}  |  Beta: {stock['beta']}")
-        with hdr2:
-            st.markdown(f"### {stock['signal']}")
-            st.markdown(f"**Нийт оноо: `{stock['score']} / 100`**")
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("💰 Үнэ", f"${stock['price']}")
-        m2.metric("🎯 Зорилт хүртэл", f"{stock['upside']}%")
-        m3.metric("📊 RSI", stock['rsi'])
-        m4.metric("📉 P/E", stock['pe'])
-        m5.metric("🔮 Fwd P/E", stock['fpe'])
-        m6.metric("📈 Орлогын өсөлт", f"{stock['growth']}%")
-        m7, m8, m9 = st.columns(3)
-        m7.metric("1M Моментум", f"{stock['mom_1m']}%")
-        m8.metric("3M Моментум", f"{stock['mom_3m']}%")
-        m9.metric("Volume хэтрэлт", f"{stock['vol_ratio']}x")
-        ch1, ch2 = st.columns(2)
-        with ch1:
-            st.subheader("📈 6 сарын үнийн хэлбэлзэл")
-            hist_data = yf.Ticker(stock['Тикер']).history(period="6mo")
-            if not hist_data.empty:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=hist_data.index, y=hist_data['Close'],
-                    mode='lines', fill='tozeroy',
-                    line=dict(color='#58a6ff', width=2),
-                    fillcolor='rgba(88,166,255,0.1)',
-                    name='Хаалтын үнэ'
-                ))
-                ma20 = hist_data['Close'].rolling(20).mean()
-                fig.add_trace(go.Scatter(
-                    x=hist_data.index, y=ma20, mode='lines',
-                    line=dict(color='#f0883e', width=1.5, dash='dot'),
-                    name='MA20'
-                ))
-                fig.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    legend=dict(orientation='h', yanchor='bottom', y=1),
-                    xaxis=dict(gridcolor='rgba(255,255,255,0.06)', showgrid=True),
-                    yaxis=dict(gridcolor='rgba(255,255,255,0.06)', showgrid=True),
-                    margin=dict(l=0, r=0, t=10, b=0),
-                    height=280
-                )
-                st.plotly_chart(fig, use_container_width=True)
-        with ch2:
-            st.subheader("🎯 Стратегийн нүүлэлт")
-            fig2 = px.line_polar(
-                stock['radar_df'], r='Оноо', theta='Үзүүлэлт',
-                line_close=True, range_r=[0, 100],
-                color_discrete_sequence=['#58a6ff']
-            )
-            fig2.update_traces(fill='toself', fillcolor='rgba(88,166,255,0.18)', line=dict(width=2))
-            fig2.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                polar=dict(
-                    bgcolor='rgba(0,0,0,0)',
-                    radialaxis=dict(gridcolor='rgba(255,255,255,0.1)', tickfont_size=9),
-                    angularaxis=dict(gridcolor='rgba(255,255,255,0.1)')
-                ),
-                margin=dict(l=20, r=20, t=30, b=20),
-                height=280
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-        st.subheader("📊 Volume (6 сар)")
-        if not hist_data.empty:
-            vol_colors = ['#3fb950' if c >= o else '#f85149'
-                          for c, o in zip(hist_data['Close'], hist_data['Open'])]
-            fig3 = go.Figure(go.Bar(
-                x=hist_data.index, y=hist_data['Volume'],
-                marker_color=vol_colors, opacity=0.7, name='Volume'
-            ))
-            fig3.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                xaxis=dict(gridcolor='rgba(255,255,255,0.06)'),
-                yaxis=dict(gridcolor='rgba(255,255,255,0.06)'),
-                margin=dict(l=0, r=0, t=10, b=0),
-                height=180
-            )
-            st.plotly_chart(fig3, use_container_width=True)
-        st.subheader("📋 Аналистын мэдээлэл")
-        ai1, ai2, ai3 = st.columns(3)
-        rec_label = {1: "Хүчтэй Худалдаж ав", 2: "Худалдаж ав", 3: "Хадгал", 4: "Зар", 5: "Хүчтэй Зар"}
-        rec_val = int(round(stock['analyst_rec'])) if isinstance(stock['analyst_rec'], float) else 3
-        ai1.metric("Аналистын үнэлгээ", rec_label.get(rec_val, "—"))
-        ai2.metric("Аналистын тоо", stock['analyst_count'])
-        ai3.metric("Ашгийн өсөлт", f"{stock['earn_growth']}%")
-
-elif 'results' in st.session_state and not st.session_state.results:
-    st.warning("⚠️ Шалгуур хангасан хувьцаа олдсонгүй. Өөр стратеги туршина уу.")
-
-else:
-    st.markdown("""
-    ### 👋 Тавтай морил!
-
-    Зүүн цэснээс **стратеги сонгоод** 🚀 товчийг дарна уу.
-
-    | Стратеги | Зориулалт | Хамгийн тохиромжтой |
-    |----------|-----------|---------------------|
-    | 📉 Төгс боломж | Хямдарсан, дутуу үнэлэгдсэн хувьцаа | Урт хугацааны хөрөнгө оруулагч |
-    | 📈 Тренд дагах | Өсч байгаа хувьцааны тренд | Идэвхтэй трейдер |
-    | 🚀 Ирээдүйн өсөлт | Хурдацтай өсөлттэй компани | Өсөлтийн хөрөнгө оруулагч |
-
-    > ⚠️ Энэхүү апп нь мэдээлэл өгөх зорилготой бөгөөд хөрөнгө оруулалтын зөвлөгөө биш болно.
-    """)
+        data = get_stock_data(t, strategy, min_cap=min
