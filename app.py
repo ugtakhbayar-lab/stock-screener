@@ -530,15 +530,15 @@ def save_to_history(results, strategy):
     for r in results:
         st.session_state.history.append({
             "Огноо": ts,
-            "Тикер": r["Тикер"],
-            "Компани": r["Компани"][:22],
+            "Тикер": r.get("Тикер", "—"),
+            "Компани": str(r.get("Компани", "—"))[:22],
             "Стратеги": strategy[:18],
-            "Оноо": r["score"],
-            "Сигнал": r["signal"],
-            "Зорилт %": r["upside"],
-            "Эрсдэл": r["risk_level"],
-            "Салбар": r["Салбар"],
-            "Үнэ $": r["price"],
+            "Оноо": r.get("score", 0),
+            "Сигнал": r.get("signal", "—"),
+            "Зорилт %": r.get("upside", 0),
+            "Эрсдэл": r.get("risk_level", "—"),
+            "Салбар": r.get("Салбар", "—"),
+            "Үнэ $": r.get("price", 0),
         })
 
 
@@ -704,7 +704,7 @@ with tab_screen:
                 "Оноо": r["score"],
                 "Δ Оноо": delta_str,
                 "Сигнал": r["signal"],
-                "Эрсдэл": r["risk_level"],
+                "Эрсдэл": r.get("risk_level", "—"),
                 "Зорилт %": r["upside"],
                 "RSI": r["rsi"],
             }
